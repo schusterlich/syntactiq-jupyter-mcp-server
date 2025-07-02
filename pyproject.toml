@@ -22,11 +22,12 @@ classifiers = [
 ]
 dependencies = [
     "jupyter-kernel-client>=0.7.2",
-    "jupyter-nbmodel-client>=0.13.1",
+    "jupyter-nbmodel-client>=0.13.2",
     "mcp[cli]>=1.10.1",
     "pydantic",
     "uvicorn",
     "click",
+    "fastapi"
 ]
 
 [project.optional-dependencies]
