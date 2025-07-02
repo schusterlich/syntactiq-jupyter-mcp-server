@@ -39,12 +39,6 @@ module.exports = {
       items: [
         {
           type: 'doc',
-          docId: 'index',
-          position: 'left',
-          label: 'Overview',
-        },
-        {
-          type: 'doc',
           docId: 'datalayer/index',
           position: 'left',
           label: 'Datalayer',
