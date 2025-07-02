@@ -9,7 +9,7 @@ slug: /
 
 **Jupyter MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server implementation that provides interaction with 📓 Jupyter Notebooks running in any JupyterLab or Notebook>7.
 
-It also works with your 💻 local Jupyter and with the Datalayer hosted Notebooks.
+It also works with your 💻 local Jupyter and with [Datalayer](https://datalayer.ai/) hosted Notebooks.
 
 Key features include:
 
@@ -17,17 +17,16 @@ Key features include:
 - 🔁 **Smart execution:** Automatically adjusts when a cell run fails thanks to cell output feedback.
 - 🤝 **MCP-Compatible:** Works with any MCP client, such as [Claude Desktop](/clients/claude_desktop), [Cursor](/clients/cursor), [Cline](/clients/cline), [Windsurf](/clients/windsurf) and more.
 
-To use Jupyter MCP Server, your first need a running Jupyter Notebook (provided by [Datalayer](/datalayer) or by the OSS [Jupyter](/jupyter) (JupyterLab or Notebook>6).
+To use Jupyter MCP Server:
 
-Then you need to [configure](/clients) your MCP client:
+1. **Run a Jupyter Notebook**: You can use the Datalayer hosted Notebooks or use the OSS JupyterLab or Notebook>6. Refer to [Datalayer section](/datalayer) or [Jupyter section](/jupyter) to setup your Notebook.
 
-1. With `stdio`, your client will launch the MCP server for you, so you the default configuraiton is often enough. The server will be pulled from Docker Hub.
-2. With `streamable-http`, you need to [run yourself a Jupyter MCP Server](/run) (on your machine or in the cloud), so you'd better look at the [fine-grained configuration details](/server-configuration) of your server.
+2. **Configure your MCP client**: Then you need to [configure](/clients) your MCP client:
 
-![Jupyter MCP Server](https://assets.datalayer.tech/jupyter-mcp/jupyter-mcp-server-claude-demo.gif)
+        1. With `stdio`, your client will launch the MCP server for you, so you the default configuration is often enough. The server will be pulled from Docker Hub.
+        2. With `streamable-http`, you need to [run yourself a Jupyter MCP Server](/run) (on your machine or in the cloud), so you'd better look at the [fine-grained configuration details](/server-configuration) of your server.
 
 Looking for blog posts, videos or other resources related to Jupyter MCP Server?
-
 👉 Check out the [Resources](./resources) section.
 
 🧰 Dive into the [Tools section](./tools) to understand the tools powering the server.

@@ -20,13 +20,16 @@ Note that the configuration is dependent on the operating system you are using.
 
 :::important
 
-Ensure the `port` of the `ROOM_URL`and `RUNTIME_TOKEN` match those used in the `jupyter lab` command.
+- Ensure the `port` of the `ROOM_URL` and `RUNTIME_URL` match those used in the `jupyter lab` command.
 
-The `ROOM_ID` should be relative to the directory where JupyterLab was started.
+- The `ROOM_ID` which is the path to the notebook you want to connect to, should be relative to the directory where JupyterLab was started.
 
+- In a basic setup, `ROOM_URL` and `RUNTIME_URL` are the same. `ROOM_TOKEN`, and `RUNTIME_TOKEN` are also the same.
+
+- More environment variables can be set, refer to the [server configuration](./server-configuration) for more details. If not specified, the server will use the default values.
 :::
 
-For MacOS and Windows.
+### For MacOS and Windows
 
 ```json
 {
@@ -61,7 +64,7 @@ For MacOS and Windows.
 }
 ```
 
-For Linux.
+### For Linux
 
 ```json
 {
@@ -75,16 +78,22 @@ For Linux.
         "-e",
         "ROOM_URL",
         "-e",
-        "RUNTIME_TOKEN",
+        "ROOM_TOKEN",
         "-e",
         "ROOM_ID",
+        "-e",
+        "RUNTIME_URL",
+        "-e",
+        "RUNTIME_TOKEN",
         "--network=host",
         "datalayer/jupyter-mcp-server:latest"
       ],
       "env": {
         "ROOM_URL": "http://localhost:8888",
-        "RUNTIME_TOKEN": "MY_TOKEN",
-        "ROOM_ID": "notebook.ipynb"
+        "ROOM_TOKEN": "MY_TOKEN",
+        "ROOM_ID": "notebook.ipynb",
+        "RUNTIME_URL": "http://localhost:8888",
+        "RUNTIME_TOKEN": "MY_TOKEN"
       }
     }
   }
