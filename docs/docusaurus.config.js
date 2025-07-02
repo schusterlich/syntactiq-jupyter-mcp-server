@@ -45,18 +45,6 @@ module.exports = {
         },
         {
           type: 'doc',
-          docId: 'run/index',
-          position: 'left',
-          label: 'Run',
-        },
-        {
-          type: 'doc',
-          docId: 'server-configuration/index',
-          position: 'left',
-          label: 'Configuration',
-        },
-        {
-          type: 'doc',
           docId: 'datalayer/index',
           position: 'left',
           label: 'Datalayer',
@@ -75,6 +63,18 @@ module.exports = {
         },
         {
           type: 'doc',
+          docId: 'server-configuration/index',
+          position: 'left',
+          label: 'Configuration',
+        },
+        {
+          type: 'doc',
+          docId: 'run/index',
+          position: 'left',
+          label: 'Run',
+        },
+        {
+          type: 'doc',
           docId: 'tools/index',
           position: 'left',
           label: 'Tools',
@@ -90,6 +90,12 @@ module.exports = {
           docId: 'contribute/index',
           position: 'left',
           label: 'Contribute',
+        },
+        {
+          type: 'doc',
+          docId: 'releases/index',
+          position: 'left',
+          label: 'Releases',
         },
         {
           type: 'doc',
