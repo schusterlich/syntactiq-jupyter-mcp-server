@@ -17,6 +17,13 @@ Key features include:
 - 🔁 **Smart execution:** Automatically adjusts when a cell run fails thanks to cell output feedback.
 - 🤝 **MCP-Compatible:** Works with any MCP client, such as [Claude Desktop](/clients/claude_desktop), [Cursor](/clients/cursor), [Cline](/clients/cline), [Windsurf](/clients/windsurf) and more.
 
+To use Jupyter MCP Server, your first need a running Jupyter Notebook (provided by [Datalayer](/datalayer) or by the OSS [Jupyter](/jupyter) (JupyterLab or Notebook>6).
+
+Then you need to [configure](/clients) your MCP client:
+
+1. With `stdio`, your client will launch the MCP server for you, so you the default configuraiton is often enough. The server will be pulled from Docker Hub.
+2. With `streamable-http`, you need to [run yourself a Jupyter MCP Server](/run) (on your machine or in the cloud), so you'd better look at the [fine-grained configuration details](/server-configuration) of your server.
+
 ![Jupyter MCP Server](https://assets.datalayer.tech/jupyter-mcp/jupyter-mcp-server-claude-demo.gif)
 
 Looking for blog posts, videos or other resources related to Jupyter MCP Server?

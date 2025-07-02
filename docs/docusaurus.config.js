@@ -51,7 +51,7 @@ module.exports = {
         },
         {
           type: 'doc',
-          docId: 'configuration/index',
+          docId: 'server-configuration/index',
           position: 'left',
           label: 'Configuration',
         },
