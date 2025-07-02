@@ -8,7 +8,7 @@ SHELL=/bin/bash
 
 .PHONY: clean build
 
-VERSION = 0.8.0
+VERSION = 0.9.0
 
 default: all ## default target is all
 
