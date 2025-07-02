@@ -13,9 +13,13 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/jupyter-mcp-server)](https://pypi.org/project/jupyter-mcp-server)
 [![smithery badge](https://smithery.ai/badge/@datalayer/jupyter-mcp-server)](https://smithery.ai/server/@datalayer/jupyter-mcp-server)
 
+> 🚨 **BREAKING CHANGE**
+> Since version `0.6.0`, the configuration has changed.
+> [Read more in the release notes.](https://jupyter-mcp-server.datalayer.tech/releases)
+
 **Jupyter MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server implementation that provides interaction with 📓 Jupyter notebooks running in any JupyterLab or Notebook>=7.
 
-This works also with your 💻 local Jupyter.
+This works also with your 💻 local Jupyter and with [Datalayer](https://datalayer.ai/) hosted Notebooks.
 
 ## 🚀 Key Features
 
@@ -25,11 +29,11 @@ This works also with your 💻 local Jupyter.
 
 ![Jupyter MCP Server Demo](https://assets.datalayer.tech/jupyter-mcp/jupyter-mcp-server-claude-demo.gif)
 
-🛠️ This MCP offers multiple tools such as `insert_execute_code_cell`, `append_markdown_cell`, `get_notebook_info`, `read_cell`, and more, enabling advanced interactions with Jupyter notebooks. Explore our [documentation](https://jupyter-mcp-server.datalayer.tech/tools) to learn about all the tools powering Jupyter MCP Server.
+🛠️ This MCP offers multiple tools such as `insert_execute_code_cell`, `append_markdown_cell`, `get_notebook_info`, `read_cell`, and more, enabling advanced interactions with Jupyter notebooks. Explore our [tools documentation](https://jupyter-mcp-server.datalayer.tech/tools) to learn about all the tools powering Jupyter MCP Server.
 
 ## 🏁 Getting Started
 
-For comprehensive setup instructions—including `Streamable HTTP` transport and advanced configuration—see our [Setup Guide](https://jupyter-mcp-server.datalayer.tech/setup). Or, get started quickly with the `stdio` transport here below.
+For comprehensive setup instructions—including `Streamable HTTP` transport and advanced configuration—check out [our documentation](https://jupyter-mcp-server.datalayer.tech/). Or, get started quickly with `JupyterLab` and `stdio` transport here below.
 
 ### 1. Set Up Your Environment
 
@@ -48,6 +52,14 @@ jupyter lab --port 8888 --IdentityProvider.token MY_TOKEN --ip 0.0.0.0
 
 ### 3. Configure Your Preferred MCP Client
 
+> [!NOTE]
+>
+> Ensure the `port` of the `ROOM_URL` and `RUNTIME_URL` match those used in the `jupyter lab` command.
+>
+> The `ROOM_ID` which is the path to the notebook you want to connect to, should be relative to the directory where JupyterLab was started.
+>
+> In a basic setup, `ROOM_URL` and `RUNTIME_URL` are the same. `ROOM_TOKEN`, and `RUNTIME_TOKEN` are also the same.
+
 #### MacOS and Windows
 
 ```json
@@ -62,15 +74,21 @@ jupyter lab --port 8888 --IdentityProvider.token MY_TOKEN --ip 0.0.0.0
         "-e",
         "ROOM_URL",
         "-e",
-        "RUNTIME_TOKEN",
+        "ROOM_TOKEN",
         "-e",
         "ROOM_ID",
+        "-e",
+        "RUNTIME_URL",
+        "-e",
+        "RUNTIME_TOKEN",
         "datalayer/jupyter-mcp-server:latest"
       ],
       "env": {
         "ROOM_URL": "http://host.docker.internal:8888",
-        "RUNTIME_TOKEN": "MY_TOKEN",
-        "ROOM_ID": "notebook.ipynb"
+        "ROOM_TOKEN": "MY_TOKEN",
+        "ROOM_ID": "notebook.ipynb",
+        "RUNTIME_URL": "http://host.docker.internal:8888",
+        "RUNTIME_TOKEN": "MY_TOKEN"
       }
     }
   }
@@ -91,16 +109,22 @@ jupyter lab --port 8888 --IdentityProvider.token MY_TOKEN --ip 0.0.0.0
         "-e",
         "ROOM_URL",
         "-e",
-        "RUNTIME_TOKEN",
+        "ROOM_TOKEN",
         "-e",
         "ROOM_ID",
+        "-e",
+        "RUNTIME_URL",
+        "-e",
+        "RUNTIME_TOKEN",
         "--network=host",
         "datalayer/jupyter-mcp-server:latest"
       ],
       "env": {
         "ROOM_URL": "http://localhost:8888",
-        "RUNTIME_TOKEN": "MY_TOKEN",
-        "ROOM_ID": "notebook.ipynb"
+        "ROOM_TOKEN": "MY_TOKEN",
+        "ROOM_ID": "notebook.ipynb",
+        "RUNTIME_URL": "http://localhost:8888",
+        "RUNTIME_TOKEN": "MY_TOKEN"
       }
     }
   }
