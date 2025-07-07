@@ -116,7 +116,7 @@ module.exports = {
           'aria-label': 'Bluesky',
         },
         {
-          href: 'https:/x.com/DatalayerIO',
+          href: 'https://x.com/DatalayerIO',
           position: 'right',
           className: 'header-x-link',
           'aria-label': 'X',
