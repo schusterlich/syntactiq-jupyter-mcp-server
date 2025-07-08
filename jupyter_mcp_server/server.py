@@ -622,6 +622,7 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
     
     return await safe_notebook_operation(_execute, max_retries=1)
 
+
 @mcp.tool()
 async def execute_cell_streaming(cell_index: int, timeout_seconds: int = 300, progress_interval: int = 5) -> list[str]:
     """Execute cell with streaming progress updates.

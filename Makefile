@@ -34,6 +34,7 @@ build-docker: ## build the docker image
 	docker buildx build --platform linux/amd64,linux/arm64 --push -t datalayer/jupyter-mcp-server:${VERSION} .
 	docker buildx build --platform linux/amd64,linux/arm64 --push -t datalayer/jupyter-mcp-server:latest .
 #	docker image tag datalayer/jupyter-mcp-server:${VERSION} datalayer/jupyter-mcp-server:latest
+	@exec echo open https://hub.docker.com/r/datalayer/jupyter-mcp-server/tags
 
 start-docker: ## start the jupyter mcp server in docker
 	docker run -i --rm \
@@ -52,6 +53,7 @@ pull-docker: ## pull the latest docker image
 push-docker: ## push the docker image to the registry
 	docker push datalayer/jupyter-mcp-server:${VERSION}
 	docker push datalayer/jupyter-mcp-server:latest
+	@exec echo open https://hub.docker.com/r/datalayer/jupyter-mcp-server/tags
 
 claude-linux: ## run the claude desktop linux app using nix
 	NIXPKGS_ALLOW_UNFREE=1 nix run github:k3d3/claude-desktop-linux-flake?rev=6d9eb2a653be8a6c06bc29a419839570e0ffc858 \
@@ -62,6 +64,7 @@ claude-linux: ## run the claude desktop linux app using nix
 # python -m jupyter_mcp_server
 start: ## start the jupyter mcp server with streamable-http transport
 	@exec echo curl http://localhost:4040/api/healthz
+	@exec echo Define in you favorite mcp client the server http://localhost:4040/mcp
 	@exec echo
 	jupyter-mcp-server start \
 	  --transport streamable-http \
