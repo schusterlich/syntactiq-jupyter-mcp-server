@@ -61,10 +61,11 @@ claude-linux: ## run the claude desktop linux app using nix
 		--extra-experimental-features flakes \
 		--extra-experimental-features nix-command
 
-# python -m jupyter_mcp_server
 start: ## start the jupyter mcp server with streamable-http transport
+	@exec echo
 	@exec echo curl http://localhost:4040/api/healthz
-	@exec echo Define in you favorite mcp client the server http://localhost:4040/mcp
+	@exec echo
+	@exec echo 👉 Define in your favorite mcp client the server http://localhost:4040/mcp
 	@exec echo
 	jupyter-mcp-server start \
 	  --transport streamable-http \
@@ -73,6 +74,22 @@ start: ## start the jupyter mcp server with streamable-http transport
 	  --room-token MY_TOKEN \
 	  --runtime-url http://localhost:8888 \
 	  --start-new-runtime true \
+	  --runtime-token MY_TOKEN \
+	  --port 4040
+
+start-no-runtime: ## start the jupyter mcp server with streamable-http transport and no runtime
+	@exec echo
+	@exec echo curl http://localhost:4040/api/healthz
+	@exec echo
+	@exec echo 👉 Define in your favorite mcp client the server http://localhost:4040/mcp
+	@exec echo
+	jupyter-mcp-server start \
+	  --transport streamable-http \
+	  --room-url http://localhost:8888 \
+	  --room-id notebook.ipynb \
+	  --room-token MY_TOKEN \
+	  --runtime-url http://localhost:8888 \
+	  --start-new-runtime false \
 	  --runtime-token MY_TOKEN \
 	  --port 4040
 

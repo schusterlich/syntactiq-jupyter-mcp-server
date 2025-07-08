@@ -284,7 +284,7 @@ async def connect(request: Request):
 
 
 @mcp.custom_route("/api/stop", ["DELETE"])
-async def stop():
+async def stop(request: Request):
     global kernel
     try:
         if kernel:
@@ -296,7 +296,7 @@ async def stop():
 
 
 @mcp.custom_route("/api/healthz", ["GET"])
-async def health_check():
+async def health_check(request: Request):
     """Custom health check endpoint"""
     kernel_status = "unknown"
     try:
@@ -306,7 +306,6 @@ async def health_check():
             kernel_status = "not_initialized"
     except Exception:
         kernel_status = "error"
-    
     return JSONResponse(
         {
             "success": True,
