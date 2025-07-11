@@ -4,7 +4,9 @@
 
 import asyncio
 import logging
+import time
 from typing import Union
+from concurrent.futures import ThreadPoolExecutor
 
 import click
 import httpx
@@ -16,11 +18,9 @@ from jupyter_nbmodel_client import (
     get_notebook_websocket_url,
 )
 from mcp.server import FastMCP
+from starlette.applications import Starlette
 from starlette.responses import JSONResponse
-
-import asyncio
-import time
-from concurrent.futures import ThreadPoolExecutor
+from starlette.middleware.cors import CORSMiddleware
 
 from jupyter_mcp_server.models import RoomRuntime
 from jupyter_mcp_server.utils import extract_output, safe_extract_outputs
@@ -51,7 +51,43 @@ ROOM_TOKEN: str | None = None
 ###############################################################################
 
 
-mcp = FastMCP(name="Jupyter MCP Server", json_response=False, stateless_http=True)
+class FastMCPWithCORS(FastMCP):
+    def streamable_http_app(self) -> Starlette:
+        """Return StreamableHTTP server app with CORS middleware
+        See: https://github.com/modelcontextprotocol/python-sdk/issues/187
+        """
+        # Get the original Starlette app
+        app = super().streamable_http_app()
+        
+        # Add CORS middleware
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # In production, should set specific domains
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )        
+        return app
+    
+    def sse_app(self, mount_path: str | None = None) -> Starlette:
+        """Return SSE server app with CORS middleware"""
+        # Get the original Starlette app
+        app = super().sse_app(mount_path)
+        # Add CORS middleware
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],  # In production, should set specific domains
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )        
+        return app
+
+
+###############################################################################
+
+
+mcp = FastMCPWithCORS(name="Jupyter MCP Server", json_response=False, stateless_http=True)
 
 kernel = None
 
@@ -59,7 +95,7 @@ kernel = None
 ###############################################################################
 
 
-def _start_kernel():
+def __start_kernel():
     """Start the Jupyter kernel with error handling."""
     global kernel
     try:
@@ -79,18 +115,18 @@ def _start_kernel():
         raise
 
 
-def _ensure_kernel_alive():
+def __ensure_kernel_alive():
     """Ensure kernel is running, restart if needed."""
     global kernel
     if kernel is None:
         logger.info("Kernel is None, starting new kernel")
-        _start_kernel()
+        __start_kernel()
     elif not hasattr(kernel, 'is_alive') or not kernel.is_alive():
         logger.info("Kernel is not alive, restarting")
-        _start_kernel()
+        __start_kernel()
 
 
-async def execute_cell_with_timeout(notebook, cell_index, kernel, timeout_seconds=300):
+async def __execute_cell_with_timeout(notebook, cell_index, kernel, timeout_seconds=300):
     """Execute a cell with timeout and real-time output sync."""
     start_time = time.time()
     
@@ -133,7 +169,7 @@ async def execute_cell_with_timeout(notebook, cell_index, kernel, timeout_second
 
 
 # Alternative approach: Create a custom execution function that forces updates
-async def execute_cell_with_forced_sync(notebook, cell_index, kernel, timeout_seconds=300):
+async def __execute_cell_with_forced_sync(notebook, cell_index, kernel, timeout_seconds=300):
     """Execute cell with forced real-time synchronization."""
     start_time = time.time()
     
@@ -193,7 +229,8 @@ async def execute_cell_with_forced_sync(notebook, cell_index, kernel, timeout_se
     
     return None
 
-def is_kernel_busy(kernel):
+
+def __is_kernel_busy(kernel):
     """Check if kernel is currently executing something."""
     try:
         # This is a simple check - you might need to adapt based on your kernel client
@@ -204,10 +241,10 @@ def is_kernel_busy(kernel):
         return False
 
 
-async def wait_for_kernel_idle(kernel, max_wait_seconds=60):
+async def __wait_for_kernel_idle(kernel, max_wait_seconds=60):
     """Wait for kernel to become idle before proceeding."""
     start_time = time.time()
-    while is_kernel_busy(kernel):
+    while __is_kernel_busy(kernel):
         elapsed = time.time() - start_time
         if elapsed > max_wait_seconds:
             logger.warning(f"Kernel still busy after {max_wait_seconds}s, proceeding anyway")
@@ -216,7 +253,7 @@ async def wait_for_kernel_idle(kernel, max_wait_seconds=60):
         await asyncio.sleep(1)
 
 
-async def safe_notebook_operation(operation_func, max_retries=3):
+async def __safe_notebook_operation(operation_func, max_retries=3):
     """Safely execute notebook operations with connection recovery."""
     for attempt in range(max_retries):
         try:
@@ -276,7 +313,7 @@ async def connect(request: Request):
     ROOM_TOKEN = room_runtime.room_token
 
     try:
-        _start_kernel()
+        __start_kernel()
         return JSONResponse({"success": True})
     except Exception as e:
         logger.error(f"Failed to connect: {e}")
@@ -349,7 +386,7 @@ async def append_markdown_cell(cell_source: str) -> str:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in append_markdown_cell: {e}")
     
-    return await safe_notebook_operation(_append_markdown)
+    return await __safe_notebook_operation(_append_markdown)
 
 
 @mcp.tool()
@@ -381,7 +418,7 @@ async def insert_markdown_cell(cell_index: int, cell_source: str) -> str:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in insert_markdown_cell: {e}")
     
-    return await safe_notebook_operation(_insert_markdown)
+    return await __safe_notebook_operation(_insert_markdown)
 
 
 @mcp.tool()
@@ -414,7 +451,7 @@ async def overwrite_cell_source(cell_index: int, cell_source: str) -> str:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in overwrite_cell_source: {e}")
     
-    return await safe_notebook_operation(_overwrite_cell)
+    return await __safe_notebook_operation(_overwrite_cell)
 
 
 @mcp.tool()
@@ -428,7 +465,7 @@ async def append_execute_code_cell(cell_source: str) -> list[str]:
         list[str]: List of outputs from the executed cell
     """
     async def _append_execute():
-        _ensure_kernel_alive()
+        __ensure_kernel_alive()
         notebook = None
         try:
             notebook = NbModelClient(
@@ -450,7 +487,7 @@ async def append_execute_code_cell(cell_source: str) -> list[str]:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in append_execute_code_cell: {e}")
     
-    return await safe_notebook_operation(_append_execute)
+    return await __safe_notebook_operation(_append_execute)
 
 
 @mcp.tool()
@@ -465,7 +502,7 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str) -> list[st
         list[str]: List of outputs from the executed cell
     """
     async def _insert_execute():
-        _ensure_kernel_alive()
+        __ensure_kernel_alive()
         notebook = None
         try:
             notebook = NbModelClient(
@@ -487,7 +524,7 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str) -> list[st
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in insert_execute_code_cell: {e}")
     
-    return await safe_notebook_operation(_insert_execute)
+    return await __safe_notebook_operation(_insert_execute)
 
 
 @mcp.tool()
@@ -500,8 +537,8 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
         list[str]: List of outputs from the executed cell
     """
     async def _execute():
-        _ensure_kernel_alive()
-        await wait_for_kernel_idle(kernel, max_wait_seconds=30)
+        __ensure_kernel_alive()
+        await __wait_for_kernel_idle(kernel, max_wait_seconds=30)
         
         notebook = None
         try:
@@ -522,7 +559,7 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
             logger.info(f"Starting execution of cell {cell_index} with {timeout_seconds}s timeout")
             
             # Use the corrected timeout function
-            await execute_cell_with_forced_sync(notebook, cell_index, kernel, timeout_seconds)
+            await __execute_cell_with_forced_sync(notebook, cell_index, kernel, timeout_seconds)
 
             # Get final outputs
             ydoc = notebook._doc
@@ -565,7 +602,7 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in execute_cell_with_progress: {e}")
     
-    return await safe_notebook_operation(_execute, max_retries=1)
+    return await __safe_notebook_operation(_execute, max_retries=1)
 
 # Simpler real-time monitoring without forced sync
 @mcp.tool()
@@ -574,8 +611,8 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
     This won't force real-time updates but will work reliably.
     """
     async def _execute():
-        _ensure_kernel_alive()
-        await wait_for_kernel_idle(kernel, max_wait_seconds=30)
+        __ensure_kernel_alive()
+        await __wait_for_kernel_idle(kernel, max_wait_seconds=30)
         
         notebook = None
         try:
@@ -619,7 +656,7 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
                 except Exception as e:
                     logger.warning(f"Error stopping notebook: {e}")
     
-    return await safe_notebook_operation(_execute, max_retries=1)
+    return await __safe_notebook_operation(_execute, max_retries=1)
 
 
 @mcp.tool()
@@ -633,8 +670,8 @@ async def execute_cell_streaming(cell_index: int, timeout_seconds: int = 300, pr
         list[str]: List of outputs including progress updates
     """
     async def _execute_streaming():
-        _ensure_kernel_alive()
-        await wait_for_kernel_idle(kernel, max_wait_seconds=30)
+        __ensure_kernel_alive()
+        await __wait_for_kernel_idle(kernel, max_wait_seconds=30)
         
         notebook = None
         outputs_log = []
@@ -721,7 +758,7 @@ async def execute_cell_streaming(cell_index: int, timeout_seconds: int = 300, pr
                 except Exception as e:
                     outputs_log.append(f"[Warning: Error closing notebook: {e}]")
     
-    return await safe_notebook_operation(_execute_streaming, max_retries=1)
+    return await __safe_notebook_operation(_execute_streaming, max_retries=1)
 
 @mcp.tool()
 async def read_all_cells() -> list[dict[str, Union[str, int, list[str]]]]:
@@ -768,7 +805,7 @@ async def read_all_cells() -> list[dict[str, Union[str, int, list[str]]]]:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in read_all_cells: {e}")
     
-    return await safe_notebook_operation(_read_all)
+    return await __safe_notebook_operation(_read_all)
 
 
 @mcp.tool()
@@ -819,7 +856,7 @@ async def read_cell(cell_index: int) -> dict[str, Union[str, int, list[str]]]:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in read_cell: {e}")
     
-    return await safe_notebook_operation(_read_cell)
+    return await __safe_notebook_operation(_read_cell)
 
 
 @mcp.tool()
@@ -860,7 +897,7 @@ async def get_notebook_info() -> dict[str, Union[str, int, dict[str, int]]]:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in get_notebook_info: {e}")
     
-    return await safe_notebook_operation(_get_info)
+    return await __safe_notebook_operation(_get_info)
 
 
 @mcp.tool()
@@ -901,7 +938,7 @@ async def delete_cell(cell_index: int) -> str:
                 except Exception as e:
                     logger.warning(f"Error stopping notebook in delete_cell: {e}")
     
-    return await safe_notebook_operation(_delete_cell)
+    return await __safe_notebook_operation(_delete_cell)
 
 
 ###############################################################################
@@ -1145,7 +1182,7 @@ def start_command(
 
     if START_NEW_RUNTIME or RUNTIME_ID:
         try:
-            _start_kernel()
+            __start_kernel()
         except Exception as e:
             logger.error(f"Failed to start kernel on startup: {e}")
 
