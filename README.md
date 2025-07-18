@@ -20,9 +20,9 @@
 > Since version `0.6.0`, the configuration has changed.
 > [Read more in the release notes.](https://jupyter-mcp-server.datalayer.tech/releases)
 
-**Jupyter MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server implementation that provides interaction with 📓 Jupyter notebooks running in any JupyterLab or Notebook>=7.
+**Jupyter MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server implementation that enables **real-time** interaction with 📓 Jupyter Notebooks, allowing AI to edit, document and execute code for data analysis, visualization etc.
 
-This works also with your 💻 local Jupyter and with [Datalayer](https://datalayer.ai/) hosted Notebooks.
+Compatible with any Jupyter deployment (local, JupyterHub, ...) and with [Datalayer](https://datalayer.ai/) hosted Notebooks.
 
 ## 🚀 Key Features
 
