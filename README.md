@@ -1,143 +1,281 @@
-<!--
-  ~ Copyright (c) 2023-2024 Datalayer, Inc.
-  ~
-  ~ BSD 3-Clause License
--->
+# 🪐✨ Jupyter MCP Server - Enhanced with Iframe Switching
 
 [![Datalayer](https://assets.datalayer.tech/datalayer-25.svg)](https://datalayer.io)
 
-[![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
-
-# 🪐✨ Jupyter MCP Server
-
-[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-mcp-server)](https://pypi.org/project/jupyter-mcp-server)
-[![smithery badge](https://smithery.ai/badge/@datalayer/jupyter-mcp-server)](https://smithery.ai/server/@datalayer/jupyter-mcp-server)
-<a href="https://mseep.ai/app/datalayer-jupyter-mcp-server">
-<img src="https://mseep.net/pr/datalayer-jupyter-mcp-server-badge.png" alt="MseeP.ai Security Assessment Badge" width="100" />
-</a>
-
-> 🚨 **BREAKING CHANGE**
-> Since version `0.6.0`, the configuration has changed.
-> [Read more in the release notes.](https://jupyter-mcp-server.datalayer.tech/releases)
-
 **Jupyter MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server implementation that enables **real-time** interaction with 📓 Jupyter Notebooks, allowing AI to edit, document and execute code for data analysis, visualization etc.
 
-Compatible with any Jupyter deployment (local, JupyterHub, ...) and with [Datalayer](https://datalayer.ai/) hosted Notebooks.
+This enhanced version includes **iframe-based notebook switching** for seamless integration into web platforms, plus a comprehensive **multi-user architecture** for production deployments.
 
-## 🚀 Key Features
+## 🎯 Current Implementation: Iframe + MCP Integration
 
-- ⚡ **Real-time control:** Instantly view notebook changes as they happen.
-- 🔁 **Smart execution:** Automatically adjusts when a cell run fails thanks to cell output feedback.
-- 🤝 **MCP-Compatible:** Works with any MCP client, such as Claude Desktop, Cursor, Windsurf, and more.
+Our implementation combines:
+- **MCP Server**: Real-time notebook control via standard Jupyter APIs
+- **Iframe Switching**: Seamless notebook navigation in web platforms
+- **Synchronized Context**: MCP server follows iframe notebook switches
 
-![Jupyter MCP Server Demo](https://assets.datalayer.tech/jupyter-mcp/jupyter-mcp-server-claude-demo.gif)
+### Key Features
 
-🛠️ This MCP offers multiple tools such as `insert_execute_code_cell`, `append_markdown_cell`, `get_notebook_info`, `read_cell`, and more, enabling advanced interactions with Jupyter notebooks. Explore our [tools documentation](https://jupyter-mcp-server.datalayer.tech/tools) to learn about all the tools powering Jupyter MCP Server.
+- ⚡ **Real-time control:** Instantly view notebook changes as they happen
+- 🔄 **Iframe Switching:** Switch between notebooks with URL reloading
+- 🎯 **Synchronized MCP Context:** MCP operations target the currently displayed notebook  
+- 🤝 **MCP-Compatible:** Works with any MCP client (Claude Desktop, Cursor, etc.)
+- 🛠️ **Multiple Tools:** `insert_execute_code_cell`, `append_markdown_cell`, `get_notebook_info`, and more
 
-## 🏁 Getting Started
+## 🏁 Quick Start
 
-For comprehensive setup instructions—including `Streamable HTTP` transport and advanced configuration—check out [our documentation](https://jupyter-mcp-server.datalayer.tech/). Or, get started quickly with `JupyterLab` and `stdio` transport here below.
-
-### 1. Set Up Your Environment
-
-```bash
-pip install jupyterlab==4.4.1 jupyter-collaboration==4.0.2 ipykernel
-pip uninstall -y pycrdt datalayer_pycrdt
-pip install datalayer_pycrdt==0.12.17
-```
-
-### 2. Start JupyterLab
+### 1. Start Services
 
 ```bash
-# make jupyterlab
-jupyter lab --port 8888 --IdentityProvider.token MY_TOKEN --ip 0.0.0.0
+# Clone and start
+git clone <repository>
+cd syntactiq-jupyter-mcp
+./quick_start.sh
 ```
 
-### 3. Configure Your Preferred MCP Client
+### 2. Test Iframe Switching
 
-> [!NOTE]
->
-> Ensure the `port` of the `ROOM_URL` and `RUNTIME_URL` match those used in the `jupyter lab` command.
->
-> The `ROOM_ID` which is the path to the notebook you want to connect to, should be relative to the directory where JupyterLab was started.
->
-> In a basic setup, `ROOM_URL` and `RUNTIME_URL` are the same. `ROOM_TOKEN`, and `RUNTIME_TOKEN` are also the same.
+```bash
+# Serve test page via HTTP (required for iframe embedding)
+python3 -m http.server 8080 --bind 127.0.0.1 &
 
-#### MacOS and Windows
-
-```json
-{
-  "mcpServers": {
-    "jupyter": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "ROOM_URL",
-        "-e",
-        "ROOM_TOKEN",
-        "-e",
-        "ROOM_ID",
-        "-e",
-        "RUNTIME_URL",
-        "-e",
-        "RUNTIME_TOKEN",
-        "datalayer/jupyter-mcp-server:latest"
-      ],
-      "env": {
-        "ROOM_URL": "http://host.docker.internal:8888",
-        "ROOM_TOKEN": "MY_TOKEN",
-        "ROOM_ID": "notebook.ipynb",
-        "RUNTIME_URL": "http://host.docker.internal:8888",
-        "RUNTIME_TOKEN": "MY_TOKEN"
-      }
-    }
-  }
-}
+# Open in browser
+open http://localhost:8080/test_iframe_switching.html
 ```
 
-#### Linux
+### 3. Available Services
 
-```json
-{
-  "mcpServers": {
-    "jupyter": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "ROOM_URL",
-        "-e",
-        "ROOM_TOKEN",
-        "-e",
-        "ROOM_ID",
-        "-e",
-        "RUNTIME_URL",
-        "-e",
-        "RUNTIME_TOKEN",
-        "--network=host",
-        "datalayer/jupyter-mcp-server:latest"
-      ],
-      "env": {
-        "ROOM_URL": "http://localhost:8888",
-        "ROOM_TOKEN": "MY_TOKEN",
-        "ROOM_ID": "notebook.ipynb",
-        "RUNTIME_URL": "http://localhost:8888",
-        "RUNTIME_TOKEN": "MY_TOKEN"
-      }
-    }
-  }
-}
+- **JupyterLab**: http://localhost:8888 (token: `MY_TOKEN`)
+- **MCP Server**: http://localhost:4040
+- **Test Interface**: http://localhost:8080/interactive_mcp_test.html
+
+## 🏗️ Architecture
+
+### Current Architecture: Single-User Development
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Web Platform / Test Interface                │
+│  ┌─────────────────┐                    ┌─────────────────────┐ │
+│  │  MCP Controls   │                    │   Jupyter iFrame    │ │
+│  │  (buttons/API)  │◄──────────────────►│   (switches on URL) │ │
+│  └─────────────────┘                    └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                          │                            │
+                     HTTP/MCP                      iframe.src = URL
+                          ▼                            ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │              Docker Compose Services                        │
+   │  ┌─────────────────┐          ┌─────────────────────────┐   │
+   │  │  MCP Server     │          │    JupyterLab           │   │
+   │  │  :4040          │◄────────►│    :8888                │   │
+   │  │                 │ WebSocket│    + Real-time Collab   │   │
+   │  └─────────────────┘  RTC API └─────────────────────────┘   │
+   └─────────────────────────────────────────────────────────────┘
 ```
 
-For detailed instructions on configuring various MCP clients—including [Claude Desktop](https://jupyter-mcp-server.datalayer.tech/clients/claude_desktop), [VS Code](https://jupyter-mcp-server.datalayer.tech/clients/vscode), [Cursor](https://jupyter-mcp-server.datalayer.tech/clients/cursor), [Cline](https://jupyter-mcp-server.datalayer.tech/clients/cline), and [Windsurf](https://jupyter-mcp-server.datalayer.tech/clients/windsurf) — see the [Clients documentation](https://jupyter-mcp-server.datalayer.tech/clients).
+### Key Integration Points
 
-## 📚 Resources
+1. **MCP → Jupyter**: Uses standard Jupyter Real-Time Collaboration WebSocket API
+2. **Iframe Switching**: URL-based navigation (`/lab/tree/path/to/notebook.ipynb`)
+3. **Context Sync**: `prepare_notebook` tool switches MCP server context to match iframe
+4. **CSP Configuration**: JupyterLab configured to allow iframe embedding
 
-Looking for blog posts, videos, or other materials about Jupyter MCP Server?
+## 🌐 Multi-User Production Architecture
 
-👉 Visit the [Resources section](https://jupyter-mcp-server.datalayer.tech/resources).
+For production deployments, we designed a scalable multi-user architecture:
+
+### Core Principles
+- **One container per user maximum** - complete resource and security isolation
+- **Multiple notebooks per user** - within their single container environment  
+- **Zero cross-user interaction** - no sharing or collaboration features
+- **Platform-only access** - Jupyter instances not directly accessible externally
+- **Resource-bounded** - fixed RAM limits with system-wide capacity management
+- **On-demand provisioning** - containers created when users first access platform
+
+### Production Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Web Platform (Frontend)                      │
+│  ┌─────────────────┐                    ┌─────────────────────┐ │
+│  │   Chat/App UI   │                    │   Jupyter iFrame    │ │
+│  │                 │◄──────────────────►│   (user-specific)   │ │
+│  └─────────────────┘                    └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Platform Backend API                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   Auth Layer    │  │ Container Mgmt  │  │ Resource Monitor│  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Container Orchestration Layer                      │
+│                                                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │  Nginx Reverse  │  │  Session Store  │  │   Warm Pool     │  │
+│  │     Proxy       │  │   (SQLite/Redis)│  │   Manager       │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    User Container Layer                         │
+│                                                                 │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────────┐ │
+│ │   User A        │ │   User B        │ │   User C            │ │
+│ │ ┌─────────────┐ │ │ ┌─────────────┐ │ │ ┌─────────────────┐ │ │
+│ │ │ JupyterLab  │ │ │ │ JupyterLab  │ │ │ │ JupyterLab      │ │ │
+│ │ │ :8888       │ │ │ │ :8888       │ │ │ │ :8888           │ │ │
+│ │ └─────────────┘ │ │ └─────────────┘ │ │ └─────────────────┘ │ │
+│ │ ┌─────────────┐ │ │ ┌─────────────┐ │ │ ┌─────────────────┐ │ │
+│ │ │ MCP Server  │ │ │ │ MCP Server  │ │ │ │ MCP Server      │ │ │
+│ │ │ :4040       │ │ │ │ :4040       │ │ │ │ :4040           │ │ │
+│ │ └─────────────┘ │ │ └─────────────┘ │ │ └─────────────────┘ │ │
+│ │ Port: 8001-8002 │ │ Port: 8003-8004 │ │ Port: 8005-8006     │ │
+│ └─────────────────┘ └─────────────────┘ └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Production Components
+
+#### 1. Container Management Service
+
+**Responsibilities:**
+- Container lifecycle management (create, start, stop, destroy)
+- Dynamic port allocation and deallocation  
+- Template-based container provisioning
+- Resource monitoring and enforcement
+- Idle timeout management
+
+#### 2. Resource Management
+
+**Features:**
+- **Idle Timeout**: Kill containers after X minutes of inactivity
+- **Resource Monitoring**: Alert if user consuming too much RAM
+- **Capacity Management**: Monitor available RAM before spawning new containers
+- **Overload Protection**: Error response when system overloaded
+
+#### 3. Session Persistence
+
+**SQLite vs Redis Trade-offs:**
+
+| Feature | SQLite | Redis |
+|---------|--------|-------|
+| **Persistence** | ✅ Durable to disk | ⚠️ Optional persistence |
+| **Setup Complexity** | ✅ Zero config | ⚠️ Additional service |
+| **Memory Usage** | ✅ Disk-based | ⚠️ RAM-based |
+| **Concurrency** | ⚠️ Limited writers | ✅ High concurrency |
+| **Expiration** | ❌ Manual cleanup | ✅ Built-in TTL |
+
+**Recommendation**: Start with SQLite for simplicity, migrate to Redis for scale.
+
+#### 4. Advanced Features
+
+- **Dynamic Port Allocation**: Reverse proxy routing by user ID
+- **Container Templates**: Different configurations for different use cases  
+- **Warm Pool**: Keep pre-warmed containers ready for instant startup
+- **Zero Cross-Importing**: Complete isolation between user environments
+
+## 🛠️ Development Tools
+
+### Available Scripts
+
+- **`./quick_start.sh`**: Start development environment
+- **`interactive_mcp_test.html`**: Interactive test interface for iframe switching
+- **`mcp_test_suite.py`**: Comprehensive automated test suite for all MCP tools
+- **`mcp_client.py`**: Python client library for MCP server
+
+### Test Environment
+
+The test interface (`interactive_mcp_test.html`) demonstrates:
+- Notebook switching via iframe URL changes
+- MCP server context synchronization
+- Real-time notebook manipulation (add cells, execute code, etc.)
+- Visual feedback for all operations
+
+### MCP Tools Available
+
+- `create_notebook` - Create new notebook files
+- `list_notebooks` - List available notebooks
+- `prepare_notebook` - Switch MCP context and get iframe URL
+- `get_notebook_info` - Get notebook metadata
+- `read_all_cells` - Get all cell content
+- `append_markdown_cell` - Add markdown cells
+- `append_code_cell` - Add code cells  
+- `execute_with_progress` - Execute cells with monitoring
+- And many more...
+
+## 📝 Configuration
+
+### Development Setup
+
+Our setup uses two different approaches:
+
+**JupyterLab**: Pre-built image with runtime dependency installation
+**MCP Server**: Custom-built image with pre-aligned dependencies
+
+```yaml
+# docker-compose.yml
+services:
+  # Uses pre-built Jupyter image with runtime dependency fixes
+  jupyterlab:
+    image: jupyter/scipy-notebook:latest  # ← Pre-built image
+    command: >
+      bash -c "pip uninstall -y pycrdt datalayer_pycrdt && 
+               pip install datalayer_pycrdt==0.12.17 &&
+               jupyter server extension enable --py jupyter_server_ydoc --sys-prefix &&
+               jupyter lab --ip 0.0.0.0 --port 8888 
+               --IdentityProvider.token=MY_TOKEN
+               --ServerApp.tornado_settings='{\"headers\":{\"Content-Security-Policy\":\"frame-ancestors * file: data: blob:\"}}'"
+
+  # Uses our custom Dockerfile with pre-aligned dependencies  
+  jupyter-mcp-server:
+    build:
+      context: .
+      # Uses our custom Dockerfile with version fixes
+    environment:
+      - ROOM_URL=http://jupyterlab:8888
+      - ROOM_TOKEN=MY_TOKEN
+```
+
+**Why custom Dockerfile for MCP server?**
+- Ensures version compatibility between `jupyter-nbmodel-client` and `jupyter_server_ydoc`
+- Pre-installs exact dependency versions that work together
+- Eliminates runtime compatibility issues
+
+### Production Considerations
+
+- **Load Balancing**: Nginx reverse proxy with user-based routing
+- **Resource Limits**: Container memory/CPU limits enforced
+- **Security**: No direct external access to Jupyter instances
+- **Monitoring**: Resource usage and container health monitoring
+- **Backup**: User notebook data persistence and backup strategies
+
+## 🚀 Deployment Options
+
+### 1. Development (Current)
+- Single docker-compose with shared JupyterLab + MCP server
+- Perfect for testing iframe switching and MCP integration
+
+### 2. Single-User Production  
+- One container per user with dedicated JupyterLab + MCP server
+- Suitable for small-scale deployments
+
+### 3. Multi-User Production
+- Full orchestration layer with container management
+- Dynamic provisioning, resource monitoring, warm pools
+- Enterprise-scale deployment
+
+## 📚 Further Resources
+
+- **[Original Datalayer Jupyter MCP Server](https://github.com/datalayer/jupyter-mcp-server)**
+- **[Model Context Protocol Specification](https://modelcontextprotocol.io)**
+- **[JupyterLab Real-Time Collaboration](https://jupyter.org/enhancement-proposals/62-real-time-collaboration/real-time-collaboration.html)**
+
+---
+
+*This enhanced implementation demonstrates the power of combining MCP's standardized protocol with iframe-based integration for seamless notebook control in web platforms.* 🎉

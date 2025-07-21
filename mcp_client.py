@@ -342,6 +342,19 @@ class MCPClient:
         else:
             return str(result)
 
+    async def execute_with_progress(self, cell_index: int, timeout_seconds: int = 300) -> list:
+        """Execute a cell with progress monitoring"""
+        result = await self.call_tool("execute_cell_with_progress", {
+            "cell_index": cell_index,
+            "timeout_seconds": timeout_seconds
+        })
+        if isinstance(result, list):
+            return result
+        elif isinstance(result, dict) and "result" in result:
+            return result["result"] if isinstance(result["result"], list) else [result["result"]]
+        else:
+            return [str(result)]
+
     async def list_notebooks(self, directory_path: str = "", include_subdirectories: bool = True, max_depth: int = 3) -> Dict[str, Any]:
         """List all notebooks in the Jupyter workspace with metadata"""
         arguments = {
@@ -354,4 +367,3 @@ class MCPClient:
             return result["result"]
         else:
             return result 
-            return str(result) 
