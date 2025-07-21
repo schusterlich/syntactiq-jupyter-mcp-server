@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCP + Iframe Notebook Switching Test</title>
+    <meta charset="UTF-8">
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 20px; 
+            background: #f8f9fa;
+            color: #333;
+        }
+        .controls { 
+            margin-bottom: 20px; 
+            padding: 20px; 
+            background: white;
+            border: 1px solid #e1e5e9; 
+            border-radius: 8px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .controls h3 { 
+            margin-top: 0; 
+            color: #2c3e50; 
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+            font-weight: 600;
+        }
+        .controls h4 {
+            color: #34495e;
+            margin: 15px 0 10px 0;
+            font-weight: 500;
+        }
+        button { 
+            margin: 5px; 
+            padding: 10px 16px; 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        button:hover { 
+            background: #2980b9; 
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled { 
+            background: #bdc3c7; 
+            cursor: not-allowed; 
+            transform: none;
+        }
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #219a52; }
+        .btn-warning { background: #f39c12; }
+        .btn-warning:hover { background: #e67e22; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        #jupyter-frame { 
+            border: 2px solid #ddd; 
+            width: 100%; 
+            height: 600px; 
+            border-radius: 8px;
+            background: white;
+        }
+        .invisible { 
+            width: 0; 
+            height: 0; 
+            border: none; 
+        }
+        #status { 
+            padding: 12px; 
+            background: #ecf0f1; 
+            border-radius: 5px; 
+            margin: 10px 0; 
+            border-left: 4px solid #3498db;
+            font-weight: 500;
+        }
+        #mcp-output { 
+            background: #2c3e50; 
+            color: #ecf0f1;
+            border: 1px solid #34495e; 
+            padding: 15px; 
+            border-radius: 5px; 
+            max-height: 300px; 
+            overflow-y: auto; 
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace; 
+            font-size: 13px; 
+            line-height: 1.4;
+        }
+        .success { color: #2ecc71; font-weight: bold; }
+        .error { color: #e74c3c; font-weight: bold; }
+        .info { color: #ecf0f1; }
+        
+        textarea { 
+            width: 100%; 
+            height: 80px; 
+            margin: 8px 0; 
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            resize: vertical;
+            transition: border-color 0.2s ease;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        
+        .section-divider {
+            border-bottom: 1px solid #e1e5e9;
+            margin: 20px 0;
+            padding-bottom: 15px;
+        }
+        
+        .status-good { 
+            background: #d5edda; 
+            border-left-color: #27ae60; 
+            color: #155724;
+        }
+        .status-error { 
+            background: #f8d7da; 
+            border-left-color: #e74c3c; 
+            color: #721c24;
+        }
+        
+        .instructions {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .instructions h4 {
+            color: white;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>MCP + Iframe Notebook Switching Test</h1>
+    
+    <!-- Conversation Switching -->
+    <div class="controls">
+        <h3>Conversation Switching</h3>
+        <div class="button-group">
+            <button onclick="createConversation('analysis_1')">Create Analysis 1</button>
+            <button onclick="createConversation('analysis_2')">Create Analysis 2</button>
+            <button onclick="switchToNotebook('conversations/analysis_1.ipynb')" class="btn-success">Switch to Analysis 1</button>
+            <button onclick="switchToNotebook('conversations/analysis_2.ipynb')" class="btn-success">Switch to Analysis 2</button>
+            <button onclick="switchToNotebook('notebook.ipynb')" class="btn-warning">Switch to Default</button>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: 500;">
+                <input type="checkbox" id="invisible-mode" onchange="toggleVisibility()">
+                Invisible Mode (your use case)
+            </label>
+        </div>
+    </div>
+    
+    <!-- MCP Operations -->
+    <div class="controls">
+        <h3>MCP Notebook Operations</h3>
+        
+        <div class="section-divider">
+            <h4>Add Cells</h4>
+            <div>
+                <textarea id="markdown-input" placeholder="Enter markdown content (e.g., # My Analysis)">## Analysis Step
+This is a new analysis step added via MCP server!</textarea>
+                <div class="button-group">
+                    <button onclick="addMarkdownCell()" class="btn-success">Add Markdown Cell</button>
+                </div>
+            </div>
+            
+            <div>
+                <textarea id="code-input" placeholder="Enter Python code">import random
+result = random.randint(1, 100)
+print(f"Random number: {result}")
+print("Hello from MCP server!")</textarea>
+                <div class="button-group">
+                    <button onclick="addCodeCell()" class="btn-success">Add Code Cell</button>
+                    <button onclick="addAndExecuteCodeCell()" class="btn-warning">Add & Execute Code Cell</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-divider">
+            <h4>Read Notebook</h4>
+            <div class="button-group">
+                <button onclick="getNotebookInfo()">Get Notebook Info</button>
+                <button onclick="readAllCells()">Read All Cells</button>
+                <button onclick="listTools()" style="background: #9b59b6;">List Available Tools</button>
+            </div>
+        </div>
+        
+        <div class="section-divider">
+            <h4>Execute</h4>
+            <div class="button-group">
+                <button onclick="executeLastCell()" class="btn-warning">Execute Last Cell</button>
+                <button onclick="executeWithProgress()" class="btn-danger">Execute with Progress</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status and Output -->
+    <div class="controls">
+        <h3>Status & Output</h3>
+        <div id="status">Ready to test MCP + Iframe switching...</div>
+        <div style="margin: 10px 0; padding: 10px; background: #e8f4fd; border-radius: 5px; border-left: 4px solid #3498db;">
+            <strong>MCP Server Target:</strong> <span id="mcp-target">notebook.ipynb</span>
+        </div>
+        <div class="button-group">
+            <button onclick="clearOutput()" style="background: #95a5a6;">Clear Output</button>
+        </div>
+        <div id="mcp-output"></div>
+    </div>
+    
+    <!-- The magic iframe -->
+    <iframe id="jupyter-frame" 
+            src="http://localhost:8888/lab"
+            onload="updateStatus()">
+    </iframe>
+    
+    <script>
+        class NotebookManager {
+            constructor() {
+                this.iframe = document.getElementById('jupyter-frame');
+                this.baseUrl = 'http://localhost:8888/lab/tree/';
+                this.mcpUrl = 'http://localhost:4040/mcp';
+                this.token = 'MY_TOKEN';
+                this.currentNotebook = 'notebook.ipynb';
+            }
+            
+            // === IFRAME SWITCHING ===
+            async switchToNotebook(notebookPath) {
+                // Update iframe
+                const url = `${this.baseUrl}${notebookPath}?token=${this.token}`;
+                this.iframe.src = url;
+                this.currentNotebook = notebookPath;
+                
+                this.updateStatus(`Switching to: ${notebookPath}...`);
+                console.log(`Switched iframe to: ${url}`);
+                
+                // Also switch MCP server context to target this notebook
+                try {
+                    await this.switchMCPContext(notebookPath);
+                    this.updateStatus(`Switched to: ${notebookPath} (iframe + MCP)`, 'good');
+                } catch (error) {
+                    this.updateStatus(`Switched iframe to: ${notebookPath}, but MCP switch failed: ${error.message}`, 'error');
+                }
+            }
+            
+            async switchMCPContext(notebookPath) {
+                // Extract conversation ID from path for prepare_notebook
+                let conversationId = 'default';
+                if (notebookPath.includes('conversations/')) {
+                    const match = notebookPath.match(/conversations\/(.+)\.ipynb/);
+                    if (match) {
+                        conversationId = match[1];
+                    }
+                }
+                
+                // Use prepare_notebook to switch MCP server context
+                await this.callMCP('prepare_notebook', {
+                    notebook_path: notebookPath,
+                    conversation_id: conversationId
+                });
+                
+                // Update visual indicator
+                document.getElementById('mcp-target').textContent = notebookPath;
+                
+                this.addOutput(`🔄 MCP server now targeting: ${notebookPath}`, 'success');
+            }
+            
+            async createConversation(conversationId) {
+                const notebookPath = `conversations/${conversationId}.ipynb`;
+                
+                this.updateStatus(`Creating conversation: ${conversationId}`);
+                
+                // Wait a moment then switch (notebooks should already exist)
+                setTimeout(async () => {
+                    await this.switchToNotebook(notebookPath);
+                }, 500);
+            }
+            
+            // === MCP SERVER CALLS ===
+            async callMCP(tool, args = {}) {
+                try {
+                    this.updateStatus(`Calling MCP: ${tool}...`);
+                    this.addOutput(`🔄 Calling ${tool}...`, 'info');
+                    
+                    const response = await fetch(this.mcpUrl, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json, text/event-stream'
+                        },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: Date.now(),
+                            method: 'tools/call',
+                            params: {
+                                name: tool,
+                                arguments: args
+                            }
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    // Handle SSE response format
+                    const responseText = await response.text();
+                    let result;
+                    
+                    // Check if response is SSE format (starts with "event:")
+                    if (responseText.startsWith('event:')) {
+                        // Parse SSE format: event: message\ndata: {...}
+                        const lines = responseText.split('\n');
+                        let dataLine = '';
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                dataLine = line.substring(6); // Remove "data: "
+                                break;
+                            }
+                        }
+                        
+                        if (dataLine) {
+                            result = JSON.parse(dataLine);
+                        } else {
+                            throw new Error('No data found in SSE response');
+                        }
+                    } else {
+                        // Handle plain JSON response
+                        result = JSON.parse(responseText);
+                    }
+                    
+                    if (result.error) {
+                        throw new Error(result.error.message || 'MCP Error');
+                    }
+                    
+                    this.addOutput(`✅ ${tool} completed`, 'success');
+                    this.addOutput(JSON.stringify(result.result, null, 2), 'info');
+                    this.updateStatus(`${tool} completed successfully`, 'good');
+                    
+                    return result.result;
+                    
+                } catch (error) {
+                    this.addOutput(`❌ ${tool} failed: ${error.message}`, 'error');
+                    this.updateStatus(`Error: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            // === NOTEBOOK OPERATIONS ===
+            async addMarkdownCell() {
+                const content = document.getElementById('markdown-input').value;
+                if (!content.trim()) {
+                    alert('Please enter markdown content');
+                    return;
+                }
+                
+                await this.callMCP('append_markdown_cell', {
+                    cell_source: content
+                });
+            }
+            
+            async addCodeCell() {
+                const content = document.getElementById('code-input').value;
+                if (!content.trim()) {
+                    alert('Please enter code content');
+                    return;
+                }
+                
+                // Use append_code_cell since insert_code_cell doesn't exist
+                await this.callMCP('append_code_cell', {
+                    cell_source: content
+                });
+            }
+            
+            async addAndExecuteCodeCell() {
+                const content = document.getElementById('code-input').value;
+                if (!content.trim()) {
+                    alert('Please enter code content');
+                    return;
+                }
+                
+                await this.callMCP('append_execute_code_cell', {
+                    cell_source: content
+                });
+            }
+            
+            async getNotebookInfo() {
+                await this.callMCP('get_notebook_info');
+            }
+            
+            async readAllCells() {
+                await this.callMCP('read_all_cells');
+            }
+            
+            async listTools() {
+                try {
+                    this.updateStatus('Listing available MCP tools...');
+                    this.addOutput('🔍 Fetching available tools...', 'info');
+                    
+                    const response = await fetch(this.mcpUrl, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json, text/event-stream'
+                        },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: Date.now(),
+                            method: 'tools/list',
+                            params: {}
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    // Handle SSE response format
+                    const responseText = await response.text();
+                    let result;
+                    
+                    if (responseText.startsWith('event:')) {
+                        const lines = responseText.split('\n');
+                        let dataLine = '';
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                dataLine = line.substring(6);
+                                break;
+                            }
+                        }
+                        if (dataLine) {
+                            result = JSON.parse(dataLine);
+                        } else {
+                            throw new Error('No data found in SSE response');
+                        }
+                    } else {
+                        result = JSON.parse(responseText);
+                    }
+                    
+                    this.addOutput('✅ Available tools:', 'success');
+                    if (result.result && result.result.tools) {
+                        result.result.tools.forEach(tool => {
+                            this.addOutput(`  • ${tool.name}: ${tool.description || 'No description'}`, 'info');
+                        });
+                    } else {
+                        this.addOutput(JSON.stringify(result.result, null, 2), 'info');
+                    }
+                    this.updateStatus('Tools listed successfully', 'good');
+                    
+                } catch (error) {
+                    this.addOutput(`❌ Failed to list tools: ${error.message}`, 'error');
+                    this.updateStatus(`Error: ${error.message}`, 'error');
+                }
+            }
+            
+            async executeLastCell() {
+                try {
+                    // First get notebook info to find last cell
+                    const info = await this.callMCP('get_notebook_info');
+                    const lastIndex = info.total_cells - 1;
+                    
+                    if (lastIndex >= 0) {
+                        await this.callMCP('execute_cell_simple_timeout', {
+                            cell_index: lastIndex,
+                            timeout_seconds: 30
+                        });
+                    } else {
+                        this.addOutput('No cells to execute', 'error');
+                    }
+                } catch (error) {
+                    // Error already handled in callMCP
+                }
+            }
+            
+            async executeWithProgress() {
+                try {
+                    // First get notebook info to find last cell
+                    const info = await this.callMCP('get_notebook_info');
+                    const lastIndex = info.total_cells - 1;
+                    
+                    if (lastIndex >= 0) {
+                        await this.callMCP('execute_cell_with_progress', {
+                            cell_index: lastIndex,
+                            timeout_seconds: 60
+                        });
+                    } else {
+                        this.addOutput('No cells to execute', 'error');
+                    }
+                } catch (error) {
+                    // Error already handled in callMCP
+                }
+            }
+            
+            // === UI HELPERS ===
+            updateStatus(message, type = 'normal') {
+                const statusEl = document.getElementById('status');
+                statusEl.textContent = message;
+                
+                // Reset classes
+                statusEl.className = '';
+                
+                // Add appropriate class
+                if (type === 'good') {
+                    statusEl.className = 'status-good';
+                } else if (type === 'error') {
+                    statusEl.className = 'status-error';
+                }
+            }
+            
+            addOutput(message, type = 'info') {
+                const output = document.getElementById('mcp-output');
+                const timestamp = new Date().toLocaleTimeString();
+                const className = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+                
+                output.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+                output.scrollTop = output.scrollHeight;
+            }
+            
+            clearOutput() {
+                document.getElementById('mcp-output').innerHTML = '';
+                this.updateStatus('Output cleared');
+            }
+        }
+        
+        // Initialize
+        const manager = new NotebookManager();
+        
+        // === GLOBAL FUNCTIONS FOR BUTTONS ===
+        
+        // Switching functions
+        async function switchToNotebook(path) {
+            await manager.switchToNotebook(path);
+        }
+        
+        async function createConversation(id) {
+            await manager.createConversation(id);
+        }
+        
+        function updateStatus() {
+            const currentUrl = manager.iframe.src;
+            manager.updateStatus(`JupyterLab loaded: ${currentUrl}`, 'good');
+        }
+        
+        function toggleVisibility() {
+            const iframe = document.getElementById('jupyter-frame');
+            const invisible = document.getElementById('invisible-mode').checked;
+            
+            if (invisible) {
+                iframe.className = 'invisible';
+                manager.updateStatus('Invisible mode - notebook running in background', 'good');
+            } else {
+                iframe.className = '';
+                manager.updateStatus('Visible mode - you can see JupyterLab');
+            }
+        }
+        
+        // MCP functions
+        function addMarkdownCell() {
+            manager.addMarkdownCell();
+        }
+        
+        function addCodeCell() {
+            manager.addCodeCell();
+        }
+        
+        function addAndExecuteCodeCell() {
+            manager.addAndExecuteCodeCell();
+        }
+        
+        function getNotebookInfo() {
+            manager.getNotebookInfo();
+        }
+        
+        function readAllCells() {
+            manager.readAllCells();
+        }
+        
+        function listTools() {
+            manager.listTools();
+        }
+        
+        function executeLastCell() {
+            manager.executeLastCell();
+        }
+        
+        function executeWithProgress() {
+            manager.executeWithProgress();
+        }
+        
+        // Clear output
+        function clearOutput() {
+            manager.clearOutput();
+        }
+    </script>
+    
+    <div class="instructions">
+        <h4>Test Instructions:</h4>
+        <ol>
+            <li><strong>Test Switching:</strong> Use the conversation switching buttons to see instant iframe reloading</li>
+            <li><strong>Test MCP Operations:</strong> Try adding markdown/code cells and executing them</li>
+            <li><strong>Watch the Magic:</strong> See how MCP server manipulates notebooks while iframe shows changes in real-time</li>
+            <li><strong>Enable Invisible Mode:</strong> See your real use case - background notebook execution</li>
+        </ol>
+        
+        <p><strong>This demonstrates:</strong> iframe switching + full MCP server capabilities = perfect solution for your platform!</p>
+    </div>
+</body>
+</html> 

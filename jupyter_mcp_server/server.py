@@ -5,7 +5,8 @@
 import asyncio
 import logging
 import time
-from typing import Union
+from datetime import datetime
+from typing import Union, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
 import click
@@ -939,6 +940,584 @@ async def delete_cell(cell_index: int) -> str:
                     logger.warning(f"Error stopping notebook in delete_cell: {e}")
     
     return await __safe_notebook_operation(_delete_cell)
+
+
+@mcp.tool()
+async def create_notebook(notebook_path: str, initial_content: str = None, switch_to_notebook: bool = True) -> str:
+    """Create a new Jupyter notebook at the specified path and optionally switch MCP context to it.
+    
+    Args:
+        notebook_path: Path where to create the notebook (e.g., "analysis/my_notebook.ipynb")
+        initial_content: Optional initial markdown content for the first cell
+        switch_to_notebook: If True, switch the MCP server context to the new notebook (default: True)
+    
+    Returns:
+        str: Success message with the created notebook path
+    """
+    async def _create_notebook():
+        try:
+            # Ensure the path ends with .ipynb
+            if not notebook_path.endswith('.ipynb'):
+                raise ValueError("Notebook path must end with '.ipynb'")
+            
+            # Create the basic notebook structure
+            notebook_content = {
+                "cells": [],
+                "metadata": {
+                    "kernelspec": {
+                        "display_name": "Python 3",
+                        "language": "python", 
+                        "name": "python3"
+                    },
+                    "language_info": {
+                        "name": "python",
+                        "version": "3.10.0"
+                    }
+                },
+                "nbformat": 4,
+                "nbformat_minor": 4
+            }
+            
+            # Add initial content if provided
+            if initial_content:
+                initial_cell = {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "source": initial_content
+                }
+                notebook_content["cells"].append(initial_cell)
+            
+            # Create the notebook using Jupyter Contents API
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                
+                # Add authorization if token is provided
+                if ROOM_TOKEN:
+                    headers["Authorization"] = f"token {ROOM_TOKEN}"
+                
+                # Prepare the request data
+                create_data = {
+                    "type": "notebook",
+                    "format": "json", 
+                    "content": notebook_content
+                }
+                
+                # Send PUT request to create the notebook
+                response = await client.put(
+                    f"{ROOM_URL}/api/contents/{notebook_path}",
+                    json=create_data,
+                    headers=headers
+                )
+                
+                if response.status_code in [200, 201]:
+                    result_data = response.json()
+                    created_path = result_data.get("path", notebook_path)
+                    
+                    # Switch MCP server context to the new notebook if requested
+                    if switch_to_notebook:
+                        global ROOM_ID
+                        old_room_id = ROOM_ID
+                        ROOM_ID = created_path
+                        logger.info(f"MCP server context switched from '{old_room_id}' to '{created_path}'")
+                        
+                        # Try to create a session for the new notebook to "warm it up"
+                        try:
+                            session_data = {
+                                "path": created_path,
+                                "type": "notebook",
+                                "name": created_path,
+                                "kernel": {"name": "python3"}
+                            }
+                            
+                            session_response = await client.post(
+                                f"{ROOM_URL}/api/sessions",
+                                json=session_data,
+                                headers=headers
+                            )
+                            
+                            if session_response.status_code in [200, 201]:
+                                logger.info(f"Session created for notebook: {created_path}")
+                                session_info = session_response.json()
+                                kernel_id = session_info.get("kernel", {}).get("id", "unknown")
+                                # Generate the complete URL with token
+                                if ROOM_TOKEN:
+                                    notebook_url = f"{ROOM_URL}/lab/tree/{created_path}?token={ROOM_TOKEN}"
+                                else:
+                                    notebook_url = f"{ROOM_URL}/lab/tree/{created_path}"
+                                
+                                return f"Notebook created at: {created_path}. MCP context switched. Session & kernel ({kernel_id[:8]}...) started. ⚠️  OPEN: {notebook_url}"
+                            else:
+                                logger.warning(f"Failed to create session: {session_response.status_code}")
+                                
+                        except Exception as e:
+                            logger.warning(f"Could not create session: {e}")
+                        
+                        # Generate the complete URL with token for fallback
+                        if ROOM_TOKEN:
+                            notebook_url = f"{ROOM_URL}/lab/tree/{created_path}?token={ROOM_TOKEN}"
+                        else:
+                            notebook_url = f"{ROOM_URL}/lab/tree/{created_path}"
+                        
+                        return f"Notebook created at: {created_path}. MCP server context switched to new notebook. ⚠️  IMPORTANT: Open this URL in your browser to establish collaboration: {notebook_url}"
+                    else:
+                        return f"Notebook created successfully at: {created_path}. MCP server context remains on current notebook."
+                else:
+                    # Try to get error details
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get("message", f"HTTP {response.status_code}")
+                    except:
+                        error_msg = f"HTTP {response.status_code}: {response.text}"
+                    
+                    raise Exception(f"Failed to create notebook: {error_msg}")
+                    
+        except Exception as e:
+            logger.error(f"Error creating notebook: {e}")
+            raise
+    
+    return await __safe_notebook_operation(_create_notebook)
+
+
+@mcp.tool()
+async def switch_notebook(notebook_path: str, close_other_tabs: bool = True) -> str:
+    """Switch the MCP server context to a different existing notebook and optionally manage browser tabs.
+    
+    Args:
+        notebook_path: Path to the notebook to switch to (e.g., "analysis/my_notebook.ipynb")
+        close_other_tabs: If True, provides URL that closes all other tabs and opens only this notebook
+    
+    Returns:
+        str: Success message with URL for browser tab management
+    """
+    try:
+        if not notebook_path.endswith('.ipynb'):
+            raise ValueError("Notebook path must end with '.ipynb'")
+        
+        # First verify the notebook exists
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            headers = {}
+            if ROOM_TOKEN:
+                headers["Authorization"] = f"token {ROOM_TOKEN}"
+            
+            response = await client.get(
+                f"{ROOM_URL}/api/contents/{notebook_path}",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                content_data = response.json()
+                if content_data.get("type") == "notebook":
+                    # Switch MCP context
+                    global ROOM_ID
+                    old_room_id = ROOM_ID
+                    ROOM_ID = notebook_path
+                    logger.info(f"MCP server context switched from '{old_room_id}' to '{notebook_path}'")
+                    
+                    # Generate URLs for different switching behaviors
+                    base_url = f"{ROOM_URL}/lab/tree/{notebook_path}"
+                    
+                    if ROOM_TOKEN:
+                        token_param = f"token={ROOM_TOKEN}"
+                    else:
+                        token_param = ""
+                    
+                    if close_other_tabs:
+                        # Use reset parameter to close all tabs and open only this notebook
+                        if token_param:
+                            switch_url = f"{base_url}?reset&{token_param}"
+                        else:
+                            switch_url = f"{base_url}?reset"
+                        
+                        message = f"""MCP context switched to: {notebook_path}
+
+🎯 **COMPLETE TAB MANAGEMENT**: Open this URL to close all other tabs and focus on this notebook:
+{switch_url}
+
+This URL will:
+• ✅ Close ALL currently open notebook tabs
+• ✅ Open ONLY the target notebook: {notebook_path}  
+• ✅ Focus the browser on the new notebook
+• ✅ Establish real-time MCP collaboration session"""
+                        
+                    else:
+                        # Regular URL without closing other tabs
+                        if token_param:
+                            switch_url = f"{base_url}?{token_param}"
+                        else:
+                            switch_url = base_url
+                        
+                        message = f"""MCP context switched to: {notebook_path}
+
+🔗 **OPEN NOTEBOOK**: Use this URL to open the notebook (keeps other tabs open):
+{switch_url}
+
+This will establish real-time MCP collaboration with the target notebook."""
+                    
+                    return message
+                    
+                else:
+                    raise Exception(f"'{notebook_path}' is not a notebook file")
+            elif response.status_code == 404:
+                raise Exception(f"Notebook not found: {notebook_path}")
+            else:
+                raise Exception(f"Failed to access notebook: HTTP {response.status_code}")
+                
+    except Exception as e:
+        logger.error(f"Error switching notebook: {e}")
+        raise Exception(f"Failed to switch notebook: {e}")
+
+
+@mcp.tool()
+async def list_notebooks(directory_path: str = "", include_subdirectories: bool = True, max_depth: int = 3) -> Dict[str, Any]:
+    """List all notebooks in the Jupyter workspace with metadata and paths.
+    
+    Args:
+        directory_path: Specific directory to search (empty for root)
+        include_subdirectories: Whether to search subdirectories
+        max_depth: Maximum directory depth to search
+        
+    Returns:
+        dict: Dictionary with notebook list and metadata
+    """
+    try:
+        notebooks = []
+        directories_scanned = []
+        
+        async def _scan_directory(path: str, current_depth: int = 0) -> None:
+            if current_depth > max_depth:
+                return
+                
+            try:
+                directories_scanned.append(path)
+                
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    headers = {}
+                    if ROOM_TOKEN:
+                        headers["Authorization"] = f"token {ROOM_TOKEN}"
+                    
+                    # Get directory contents
+                    url = f"{ROOM_URL}/api/contents/{path}" if path else f"{ROOM_URL}/api/contents"
+                    response = await client.get(url, headers=headers)
+                    
+                    if response.status_code == 200:
+                        content_data = response.json()
+                        content_list = content_data.get("content", [])
+                        
+                        if isinstance(content_list, list):
+                            for item in content_list:
+                                if item.get("type") == "notebook" and item.get("name", "").endswith(".ipynb"):
+                                    # Found a notebook
+                                    notebook_info = {
+                                        "name": item.get("name"),
+                                        "path": item.get("path"),
+                                        "created": item.get("created"),
+                                        "last_modified": item.get("last_modified"),
+                                        "size": item.get("size"),
+                                        "writable": item.get("writable", True),
+                                        "url": f"{ROOM_URL}/lab/tree/{item.get('path')}"
+                                    }
+                                    
+                                    # Add token to URL if available
+                                    if ROOM_TOKEN:
+                                        notebook_info["url"] += f"?token={ROOM_TOKEN}"
+                                    
+                                    # Check if this is the current MCP notebook
+                                    notebook_info["is_current_mcp_context"] = (item.get("path") == ROOM_ID)
+                                    
+                                    notebooks.append(notebook_info)
+                                    
+                                elif item.get("type") == "directory" and include_subdirectories:
+                                    # Recursively scan subdirectory
+                                    await _scan_directory(item.get("path", ""), current_depth + 1)
+                                    
+            except Exception as e:
+                logger.warning(f"Error scanning directory '{path}': {e}")
+        
+        # Start scanning from the specified directory
+        await _scan_directory(directory_path)
+        
+        # Sort notebooks by last modified (newest first)
+        notebooks.sort(key=lambda x: x.get("last_modified", ""), reverse=True)
+        
+        result = {
+            "notebooks": notebooks,
+            "total_found": len(notebooks),
+            "current_mcp_context": ROOM_ID,
+            "directories_scanned": directories_scanned,
+            "search_params": {
+                "directory_path": directory_path or "root",
+                "include_subdirectories": include_subdirectories,
+                "max_depth": max_depth
+            }
+        }
+        
+        logger.info(f"Found {len(notebooks)} notebooks in workspace")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error listing notebooks: {e}")
+        raise Exception(f"Failed to list notebooks: {e}")
+
+
+@mcp.tool()
+async def list_open_notebooks() -> Dict[str, Any]:
+    """List all currently open notebooks in the JupyterLab interface.
+    
+    Returns:
+        dict: Information about open notebooks and workspace state
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            headers = {}
+            if ROOM_TOKEN:
+                headers["Authorization"] = f"token {ROOM_TOKEN}"
+            
+            # Get current workspace data to see what's open
+            response = await client.get(
+                f"{ROOM_URL}/lab/api/workspaces/",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                workspaces_data = response.json()
+                
+                open_notebooks = []
+                workspace_info = {}
+                
+                # Process workspaces to find open notebooks
+                if "workspaces" in workspaces_data:
+                    workspaces = workspaces_data["workspaces"]
+                    
+                    # Check the default workspace and named workspaces
+                    all_workspaces = workspaces.get("values", [])
+                    
+                    for workspace in all_workspaces:
+                        workspace_id = workspace.get("metadata", {}).get("id", "unknown")
+                        workspace_data = workspace.get("data", {})
+                        
+                        # Look for notebook-related entries in the workspace data
+                        notebook_entries = []
+                        for key, value in workspace_data.items():
+                            # Look for docmanager entries (open documents)
+                            if "docmanager" in key.lower() or "notebook" in key.lower():
+                                if isinstance(value, dict) and "data" in value:
+                                    data = value["data"]
+                                    if isinstance(data, dict) and "path" in data:
+                                        path = data["path"]
+                                        if path.endswith(".ipynb"):
+                                            notebook_entries.append({
+                                                "path": path,
+                                                "factory": data.get("factory", "unknown"),
+                                                "workspace_key": key
+                                            })
+                        
+                        if notebook_entries:
+                            workspace_info[workspace_id] = {
+                                "open_notebooks": notebook_entries,
+                                "total_open": len(notebook_entries)
+                            }
+                            open_notebooks.extend(notebook_entries)
+                
+                # Also get the default workspace specifically
+                try:
+                    default_response = await client.get(
+                        f"{ROOM_URL}/lab/api/workspaces/lab",
+                        headers=headers
+                    )
+                    if default_response.status_code == 200:
+                        default_data = default_response.json()
+                        workspace_data = default_data.get("data", {})
+                        
+                        for key, value in workspace_data.items():
+                            if isinstance(value, dict) and "data" in value:
+                                data = value["data"]
+                                if isinstance(data, dict) and "path" in data:
+                                    path = data["path"]
+                                    if path.endswith(".ipynb"):
+                                        # Avoid duplicates
+                                        if not any(nb["path"] == path for nb in open_notebooks):
+                                            open_notebooks.append({
+                                                "path": path,
+                                                "factory": data.get("factory", "unknown"),
+                                                "workspace_key": key,
+                                                "workspace": "default"
+                                            })
+                except:
+                    pass  # Default workspace might not exist
+                
+                result = {
+                    "open_notebooks": open_notebooks,
+                    "total_open": len(open_notebooks),
+                    "current_mcp_context": ROOM_ID,
+                    "workspace_info": workspace_info,
+                    "api_status": "success"
+                }
+                
+                logger.info(f"Found {len(open_notebooks)} open notebooks in JupyterLab interface")
+                return result
+                
+            else:
+                raise Exception(f"Failed to access workspaces API: HTTP {response.status_code}")
+                
+    except Exception as e:
+        logger.error(f"Error listing open notebooks: {e}")
+        return {
+            "open_notebooks": [],
+            "total_open": 0,
+            "current_mcp_context": ROOM_ID,
+            "workspace_info": {},
+            "api_status": "error",
+            "error_message": str(e)
+        }
+
+
+@mcp.tool()
+async def prepare_notebook(notebook_path: str) -> str:
+    """Prepare a notebook for MCP collaboration by handling all setup automatically.
+    
+    This comprehensive tool will:
+    - ✅ Check if the notebook exists
+    - ✅ Switch MCP server context to the notebook
+    - ✅ Create a focused workspace with ONLY the target notebook open
+    - ✅ Provide URL to the focused workspace
+    - ✅ Establish real-time collaboration session
+    
+    Args:
+        notebook_path: Path to the notebook (e.g., "analysis/my_notebook.ipynb")
+    
+    Returns:
+        str: Complete preparation status and browser URL for focused notebook work
+    """
+    global ROOM_ID, ROOM_URL, ROOM_TOKEN
+    
+    try:
+        # Check if notebook exists
+        async with httpx.AsyncClient() as client:
+            # Build the Contents API URL
+            contents_url = f"{ROOM_URL}/api/contents/{notebook_path}"
+            headers = {}
+            if ROOM_TOKEN:
+                headers["Authorization"] = f"token {ROOM_TOKEN}"
+            
+            # Check if the notebook exists
+            response = await client.get(contents_url, headers=headers)
+            if response.status_code == 404:
+                return f"❌ **ERROR**: Notebook '{notebook_path}' not found. Please check the path."
+            elif response.status_code != 200:
+                return f"❌ **ERROR**: Failed to access notebook '{notebook_path}'. Status: {response.status_code}"
+            
+            # Get notebook metadata
+            notebook_info = response.json()
+            size_kb = round(notebook_info.get('size', 0) / 1024, 1)
+            last_modified = notebook_info.get('last_modified', 'Unknown')
+            if last_modified != 'Unknown':
+                # Parse and format the timestamp
+                try:
+                    dt = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+                    last_modified = dt.strftime('%Y-%m-%d %H:%M:%S')
+                except Exception:
+                    pass
+            
+            # Update MCP context if needed
+            context_switched = False
+            if ROOM_ID != notebook_path:
+                old_context = ROOM_ID
+                ROOM_ID = notebook_path
+                context_switched = True
+            else:
+                old_context = "same"
+            
+            # Create a focused workspace using the Workspaces API
+            workspace_name = f"mcp-focused-{notebook_path.replace('/', '-').replace('.ipynb', '')}"
+            
+            # Define the workspace data with only the target notebook open
+            workspace_data = {
+                "data": {
+                    f"application-mimedocuments:{notebook_path}:Notebook": {
+                        "data": {"path": notebook_path, "factory": "Notebook"}
+                    }
+                },
+                "metadata": {
+                    "id": f"/lab/workspaces/{workspace_name}",
+                    "last_modified": datetime.now().isoformat(),
+                    "created": datetime.now().isoformat()
+                }
+            }
+            
+            # Save the focused workspace
+            workspace_url = f"{ROOM_URL}/lab/api/workspaces/{workspace_name}"
+            workspace_response = await client.put(
+                workspace_url, 
+                headers=headers,
+                json=workspace_data
+            )
+            
+            if workspace_response.status_code in [204, 200]:
+                # Generate the focused workspace URL
+                token_param = f"token={ROOM_TOKEN}" if ROOM_TOKEN else ""
+                if token_param:
+                    focused_url = f"{ROOM_URL}/lab/workspaces/{workspace_name}?{token_param}"
+                else:
+                    focused_url = f"{ROOM_URL}/lab/workspaces/{workspace_name}"
+                
+                # Prepare the success message
+                result_message = f"""🎯 **NOTEBOOK PREPARATION COMPLETE**
+
+📋 **Notebook Details**:
+   • Path: {notebook_path}
+   • Size: {size_kb}KB
+   • Modified: {last_modified}
+   • Status: ✅ Found and accessible
+
+⚡ **MCP Setup**:
+   • Context: {'✅ Switched to' if context_switched else '✅ Already set to'} '{notebook_path}'
+   {f'• Previous: {old_context}' if context_switched and old_context != 'same' else ''}
+   • Status: ✅ Ready for real-time collaboration
+
+🎯 **FOCUSED WORKSPACE CREATED**:
+   Click this URL to open ONLY the target notebook in a clean workspace:
+   
+   {focused_url}
+   
+   This focused workspace will:
+   • 🗂️  Open ONLY the target notebook (no other tabs)
+   • 🎯 Provide a clean, distraction-free environment
+   • ⚡ Establish MCP collaboration session immediately
+   • 💾 Save your focused workspace state automatically
+   
+✅ **Ready!** Your notebook is prepared for focused MCP-powered work.
+
+💡 **Pro Tip**: Bookmark the focused workspace URL for quick access!"""
+                
+                return result_message
+            else:
+                # Fallback to regular URL if workspace creation fails
+                logger.warning(f"Failed to create focused workspace: {workspace_response.status_code}")
+                token_param = f"token={ROOM_TOKEN}" if ROOM_TOKEN else ""
+                fallback_url = f"{ROOM_URL}/lab/tree/{notebook_path}?{token_param}" if token_param else f"{ROOM_URL}/lab/tree/{notebook_path}"
+                
+                return f"""🎯 **NOTEBOOK PREPARATION COMPLETE** (Fallback Mode)
+
+📋 **Notebook Details**:
+   • Path: {notebook_path}
+   • Size: {size_kb}KB
+   • Modified: {last_modified}
+   • Status: ✅ Found and accessible
+
+⚡ **MCP Setup**:
+   • Context: {'✅ Switched to' if context_switched else '✅ Already set to'} '{notebook_path}'
+   • Status: ✅ Ready for real-time collaboration
+
+🔗 **NOTEBOOK URL**:
+   {fallback_url}
+   
+⚠️  Note: Focused workspace creation failed, using standard URL instead."""
+                
+    except Exception as e:
+        logger.error(f"Error in prepare_notebook: {e}")
+        return f"❌ **ERROR**: Failed to prepare notebook '{notebook_path}'. Error: {str(e)}"
 
 
 ###############################################################################

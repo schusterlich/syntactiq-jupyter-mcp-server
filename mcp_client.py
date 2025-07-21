@@ -287,4 +287,71 @@ class MCPClient:
         if isinstance(result, dict) and "result" in result:
             return result["result"]
         else:
+            return str(result)
+    
+    async def create_notebook(self, notebook_path: str, initial_content: str = None, switch_to_notebook: bool = True) -> str:
+        """Create a new Jupyter notebook at the specified path
+        
+        Args:
+            notebook_path: Path where to create the notebook (e.g., "analysis/my_notebook.ipynb")
+            initial_content: Optional initial markdown content for the first cell
+            switch_to_notebook: If True, switch the MCP server context to the new notebook (default: True)
+            
+        Returns:
+            str: Success message with the created notebook path
+        """
+        arguments = {"notebook_path": notebook_path, "switch_to_notebook": switch_to_notebook}
+        if initial_content is not None:
+            arguments["initial_content"] = initial_content
+            
+        result = await self.call_tool("create_notebook", arguments)
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+        else:
+            return str(result)
+    
+    async def switch_notebook(self, notebook_path: str, close_other_tabs: bool = True) -> str:
+        """Switch the MCP server context to a different existing notebook with tab management"""
+        arguments = {"notebook_path": notebook_path, "close_other_tabs": close_other_tabs}
+        result = await self.call_tool("switch_notebook", arguments)
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+        else:
+            return str(result)
+
+    async def list_open_notebooks(self) -> Dict[str, Any]:
+        """List all currently open notebooks in the JupyterLab interface"""
+        result = await self.call_tool("list_open_notebooks")
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+        else:
+            return result
+
+    async def prepare_notebook(self, notebook_path: str) -> str:
+        """Prepare a notebook for MCP collaboration with comprehensive setup.
+        
+        This handles:
+        - Checking if notebook exists
+        - Switching MCP context
+        - Providing focused browser URL (closes other tabs)
+        - Setting up collaboration session
+        """
+        result = await self.call_tool("prepare_notebook", {"notebook_path": notebook_path})
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+        else:
+            return str(result)
+
+    async def list_notebooks(self, directory_path: str = "", include_subdirectories: bool = True, max_depth: int = 3) -> Dict[str, Any]:
+        """List all notebooks in the Jupyter workspace with metadata"""
+        arguments = {
+            "directory_path": directory_path,
+            "include_subdirectories": include_subdirectories,
+            "max_depth": max_depth
+        }
+        result = await self.call_tool("list_notebooks", arguments)
+        if isinstance(result, dict) and "result" in result:
+            return result["result"]
+        else:
+            return result 
             return str(result) 
