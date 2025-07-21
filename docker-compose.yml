@@ -1,0 +1,115 @@
+# Copyright (c) 2023-2024 Datalayer, Inc.
+#
+# BSD 3-Clause License
+
+services:
+  # JupyterLab Server with collaboration support
+  jupyterlab:
+    image: jupyter/datascience-notebook:latest
+    container_name: jupyter-mcp-jupyterlab
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-MY_TOKEN}
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - jupyter_data:/home/jovyan
+    command: >
+      start-notebook.sh
+      --NotebookApp.token='${JUPYTER_TOKEN:-MY_TOKEN}'
+      --NotebookApp.password=''
+      --ServerApp.root_dir='/home/jovyan/work'
+      --ServerApp.allow_origin='*'
+      --ServerApp.disable_check_xsrf=True
+      --ip=0.0.0.0
+      --port=8888
+    restart: unless-stopped
+    networks:
+      - jupyter-mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8888/api || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Jupyter MCP Server with streamable-http transport
+  jupyter-mcp-server:
+    image: datalayer/jupyter-mcp-server:${MCP_VERSION:-latest}
+    container_name: jupyter-mcp-server
+    ports:
+      - "4040:4040"
+    environment:
+      - TRANSPORT=streamable-http
+      - PROVIDER=${PROVIDER:-jupyter}
+      - PORT=4040
+      
+      # Runtime configuration
+      - RUNTIME_URL=http://jupyterlab:8888
+      - START_NEW_RUNTIME=${START_NEW_RUNTIME:-true}
+      - RUNTIME_ID=${RUNTIME_ID:-}
+      - RUNTIME_TOKEN=${JUPYTER_TOKEN:-MY_TOKEN}
+      
+      # Room configuration
+      - ROOM_URL=http://jupyterlab:8888
+      - ROOM_ID=${ROOM_ID:-notebook.ipynb}
+      - ROOM_TOKEN=${JUPYTER_TOKEN:-MY_TOKEN}
+    depends_on:
+      jupyterlab:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - jupyter-mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4040/api/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Nginx reverse proxy (optional, for production deployments)
+  nginx:
+    image: nginx:alpine
+    container_name: jupyter-mcp-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - jupyterlab
+      - jupyter-mcp-server
+    restart: unless-stopped
+    networks:
+      - jupyter-mcp-network
+    profiles:
+      - production
+
+  # Redis for session management (optional, for scaling)
+  redis:
+    image: redis:7-alpine
+    container_name: jupyter-mcp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - jupyter-mcp-network
+    profiles:
+      - scaling
+
+volumes:
+  jupyter_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  jupyter-mcp-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
