@@ -208,6 +208,28 @@ The server provides 12 primary tools for notebook interaction:
 - `datalayer_pycrdt==0.12.17`: Specific CRDT implementation for real-time collaboration
 - Note: Standard `pycrdt` is explicitly uninstalled in favor of Datalayer's version
 
+### Critical Setup Requirements
+
+⚠️ **Important:** Two critical requirements for the collaboration API to work:
+
+#### 1. Server Extension Activation
+The `jupyter_server_ydoc` extension must be **enabled as a server extension**:
+
+```bash
+jupyter server extension enable --py jupyter_server_ydoc --sys-prefix
+```
+
+Without this step, the collaboration API endpoints (`/api/collaboration/room`) will return 404 errors, causing MCP server WebSocket connections to fail immediately. This is because the extension can be **loaded** but not **enabled**, meaning the API handlers are not registered with the Jupyter server.
+
+#### 2. Package Version Compatibility
+Due to breaking changes in Jupyter collaboration APIs, **exact version matching is critical**:
+
+- **JupyterLab**: Must use `jupyter_server_ydoc 2.1.0` with `jupyter-collaboration 4.0.2`
+- **MCP Server**: Must use `jupyter-nbmodel-client 0.13.5` with the same `jupyter_server_ydoc` version
+- **pycrdt**: Use `datalayer_pycrdt==0.12.17` instead of standard `pycrdt` to avoid conflicts
+
+The provided `Dockerfile.custom` ensures both containers use compatible package versions. This prevents the common `ModuleNotFoundError: No module named 'jupyter_server.contents'` error that occurs when mixing incompatible versions.
+
 ### Optional Dependencies
 - **test**: `ipykernel`, `jupyter_server>=1.6,<3`, `pytest>=7.0`
 - **lint**: `mdformat>0.7`, `mdformat-gfm>=0.3.5`, `ruff`
