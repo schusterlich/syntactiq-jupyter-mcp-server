@@ -20,6 +20,7 @@ services:
       --ServerApp.allow_remote_access=True
       --ServerApp.root_dir='/home/jovyan/'
       --LabApp.collaborative=True
+      --ServerApp.tornado_settings='{"headers":{"Content-Security-Policy":"frame-ancestors '\''self'\'' *;"}}'
     networks:
       - jupyter-mcp-network
     healthcheck:

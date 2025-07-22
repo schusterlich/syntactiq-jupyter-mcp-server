@@ -24,9 +24,9 @@ from mcp.server import FastMCP
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 
+from jupyter_mcp_server import config
 from jupyter_mcp_server.config import (
-    TRANSPORT, PROVIDER, RUNTIME_URL, START_NEW_RUNTIME, RUNTIME_ID, RUNTIME_TOKEN,
-    ROOM_URL, ROOM_ID, ROOM_TOKEN
+    TRANSPORT, PROVIDER, RUNTIME_URL, START_NEW_RUNTIME, RUNTIME_ID, RUNTIME_TOKEN
 )
 
 # Global variables for kernel and notebook connection
@@ -48,7 +48,7 @@ def __start_kernel():
     
     try:
         # Initialize the kernel client with the provided parameters.
-        kernel = KernelClient(server_url=RUNTIME_URL, token=RUNTIME_TOKEN, kernel_id=RUNTIME_ID)
+        kernel = KernelClient(server_url=config.RUNTIME_URL, token=config.RUNTIME_TOKEN, kernel_id=config.RUNTIME_ID)
         kernel.start()
         logger.info("Kernel started successfully")
     except Exception as e:
@@ -67,19 +67,19 @@ async def __start_notebook_connection():
         logger.warning(f"Error stopping existing notebook connection: {e}")
     
     try:
-        logger.info(f"Establishing notebook connection to {ROOM_URL} for {ROOM_ID}")
+        logger.info(f"Establishing notebook connection to {config.ROOM_URL} for {config.ROOM_ID}")
         # Initialize the persistent notebook connection using WebSocket URL
         websocket_url = get_notebook_websocket_url(
-            server_url=ROOM_URL, 
-            token=ROOM_TOKEN, 
-            path=ROOM_ID, 
+            server_url=config.ROOM_URL, 
+            token=config.ROOM_TOKEN, 
+            path=config.ROOM_ID, 
             provider=PROVIDER
         )
         logger.info(f"WebSocket URL: {websocket_url}")
         
         notebook_connection = NbModelClient(websocket_url)
         await notebook_connection.start()
-        logger.info(f"Persistent notebook connection established for: {ROOM_ID}")
+        logger.info(f"Persistent notebook connection established for: {config.ROOM_ID}")
         
         # Verify the connection immediately
         if hasattr(notebook_connection, '_doc'):
@@ -435,28 +435,22 @@ def connect_command(
     global PROVIDER
     PROVIDER = provider
 
-    global RUNTIME_URL
-    RUNTIME_URL = runtime_url
-    global RUNTIME_ID
-    RUNTIME_ID = runtime_id
-    global RUNTIME_TOKEN
-    RUNTIME_TOKEN = runtime_token
+    config.RUNTIME_URL = runtime_url
+    config.RUNTIME_ID = runtime_id
+    config.RUNTIME_TOKEN = runtime_token
 
-    global ROOM_URL
-    ROOM_URL = room_url
-    global ROOM_ID
-    ROOM_ID = room_id
-    global ROOM_TOKEN
-    ROOM_TOKEN = room_token
+    config.ROOM_URL = room_url
+    config.ROOM_ID = room_id
+    config.ROOM_TOKEN = room_token
 
     room_runtime = RoomRuntime(
         provider=PROVIDER,
         runtime_url=RUNTIME_URL,
         runtime_id=RUNTIME_ID,
         runtime_token=RUNTIME_TOKEN,
-        room_url=ROOM_URL,
-        room_id=ROOM_ID,
-        room_token=ROOM_TOKEN,
+        room_url=config.ROOM_URL,
+        room_id=config.ROOM_ID,
+        room_token=config.ROOM_TOKEN,
     )
 
     r = httpx.put(
@@ -576,23 +570,17 @@ def start_command(
     global PROVIDER
     PROVIDER = provider
 
-    global RUNTIME_URL
-    RUNTIME_URL = runtime_url
+    config.RUNTIME_URL = runtime_url
     global START_NEW_RUNTIME
     START_NEW_RUNTIME = start_new_runtime
-    global RUNTIME_ID
-    RUNTIME_ID = runtime_id
-    global RUNTIME_TOKEN
-    RUNTIME_TOKEN = runtime_token
+    config.RUNTIME_ID = runtime_id
+    config.RUNTIME_TOKEN = runtime_token
 
-    global ROOM_URL
-    ROOM_URL = room_url
-    global ROOM_ID
-    ROOM_ID = room_id
-    global ROOM_TOKEN
-    ROOM_TOKEN = room_token
+    config.ROOM_URL = room_url
+    config.ROOM_ID = room_id
+    config.ROOM_TOKEN = room_token
 
-    if START_NEW_RUNTIME or RUNTIME_ID:
+    if START_NEW_RUNTIME or config.RUNTIME_ID:
         try:
             __start_kernel()
         except Exception as e:

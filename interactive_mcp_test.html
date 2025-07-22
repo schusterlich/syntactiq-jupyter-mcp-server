@@ -205,6 +205,7 @@ print("Hello from MCP server!")</textarea>
                 <button onclick="getNotebookInfo()">Get Notebook Info</button>
                 <button onclick="readAllCells()">Read All Cells</button>
                 <button onclick="listTools()" style="background: #9b59b6;">List Available Tools</button>
+                <button onclick="debugConnectionStatus()" style="background: #e67e22;">Debug MCP Context</button>
             </div>
         </div>
         
@@ -266,19 +267,10 @@ print("Hello from MCP server!")</textarea>
             }
             
             async switchMCPContext(notebookPath) {
-                // Extract conversation ID from path for prepare_notebook
-                let conversationId = 'default';
-                if (notebookPath.includes('conversations/')) {
-                    const match = notebookPath.match(/conversations\/(.+)\.ipynb/);
-                    if (match) {
-                        conversationId = match[1];
-                    }
-                }
-                
-                // Use prepare_notebook to switch MCP server context
-                await this.callMCP('prepare_notebook', {
+                // Use switch_notebook to properly switch MCP server context
+                await this.callMCP('switch_notebook', {
                     notebook_path: notebookPath,
-                    conversation_id: conversationId
+                    close_other_tabs: false  // We handle iframe switching separately
                 });
                 
                 // Update visual indicator
@@ -476,6 +468,10 @@ print("Hello from MCP server!")</textarea>
                 }
             }
             
+            async debugConnectionStatus() {
+                await this.callMCP('debug_connection_status');
+            }
+            
             async executeLastCell() {
                 try {
                     // First get notebook info to find last cell
@@ -600,6 +596,10 @@ print("Hello from MCP server!")</textarea>
         
         function listTools() {
             manager.listTools();
+        }
+        
+        function debugConnectionStatus() {
+            manager.debugConnectionStatus();
         }
         
         function executeLastCell() {
