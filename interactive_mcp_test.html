@@ -187,16 +187,29 @@ This is a new analysis step added via MCP server!</textarea>
                 </div>
             </div>
             
-            <div>
-                <textarea id="code-input" placeholder="Enter Python code">import random
-result = random.randint(1, 100)
-print(f"Random number: {result}")
-print("Hello from MCP server!")</textarea>
-                <div class="button-group">
-                    <button onclick="addCodeCell()" class="btn-success">Add Code Cell</button>
-                    <button onclick="addAndExecuteCodeCell()" class="btn-warning">Add & Execute Code Cell</button>
-                </div>
+                    <div>
+            <textarea id="code-input" placeholder="Enter Python code">import matplotlib.pyplot as plt
+import numpy as np
+
+# Generate sample data
+x = np.linspace(0, 10, 100)
+y = np.sin(x)
+
+# Create plot
+plt.figure(figsize=(8, 6))
+plt.plot(x, y, 'b-', linewidth=2)
+plt.title('Sine Wave')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.grid(True)
+plt.show()
+
+print("Chart generated successfully!")</textarea>
+            <div class="button-group">
+                <button onclick="addCodeCell()" class="btn-success">Add Code Cell</button>
+                <button onclick="addAndExecuteCodeCell()" class="btn-warning">Add & Execute Code Cell</button>
             </div>
+        </div>
         </div>
         
         <div class="section-divider">
@@ -344,13 +357,62 @@ print("Hello from MCP server!")</textarea>
                         result = JSON.parse(responseText);
                     }
                     
-                    if (result.error) {
-                        throw new Error(result.error.message || 'MCP Error');
+                                if (result.error) {
+                throw new Error(result.error.message || 'MCP Error');
+            }
+            
+            this.addOutput(`✅ ${tool} completed`, 'success');
+            
+            // Enhanced display for clean cell structure
+            const output = result.result;
+            if (output && typeof output === 'object' && output.cell_index !== undefined) {
+                // Single cell object (execution tools)
+                this.addOutput(`📄 Cell ${output.cell_index} (${output.cell_id}):`, 'info');
+                
+                if (output.output && output.output.length > 0) {
+                    output.output.forEach((text) => {
+                        this.addOutput(`  ${text}`, 'info');
+                    });
+                }
+                
+                if (output.images && output.images.length > 0) {
+                    this.addOutput(`  🖼️ ${output.images.length} image(s) generated:`, 'success');
+                    output.images.forEach((img, i) => {
+                        this.addOutput(`    • ${img.mime_type} - ${img.description} (${(img.size_bytes/1024).toFixed(1)}KB)`, 'success');
+                    });
+                }
+            } else if (Array.isArray(output)) {
+                // Array of cell objects (read_all_cells)
+                this.addOutput(`📋 Notebook: ${output.length} cells total`, 'info');
+                let totalImages = 0;
+                
+                output.forEach((cell) => {
+                    if (cell.cell_index !== undefined) {
+                        this.addOutput(`📄 Cell ${cell.cell_index} (${cell.cell_id}):`, 'info');
+                        
+                        if (cell.output && cell.output.length > 0) {
+                            cell.output.forEach(out => this.addOutput(`  ${out}`, 'info'));
+                        }
+                        
+                        if (cell.images && cell.images.length > 0) {
+                            totalImages += cell.images.length;
+                            this.addOutput(`  🖼️ ${cell.images.length} image(s):`, 'success');
+                            cell.images.forEach(img => {
+                                this.addOutput(`    • ${img.mime_type} - ${img.description} (${(img.size_bytes/1024).toFixed(1)}KB)`, 'success');
+                            });
+                        }
                     }
-                    
-                    this.addOutput(`✅ ${tool} completed`, 'success');
-                    this.addOutput(JSON.stringify(result.result, null, 2), 'info');
-                    this.updateStatus(`${tool} completed successfully`, 'good');
+                });
+                
+                if (totalImages > 0) {
+                    this.addOutput(`🖼️ Total images across all cells: ${totalImages}`, 'success');
+                }
+            } else {
+                // Fallback for non-structured outputs
+                this.addOutput(JSON.stringify(output, null, 2), 'info');
+            }
+            
+            this.updateStatus(`${tool} completed successfully`, 'good');
                     
                     return result.result;
                     
@@ -598,9 +660,9 @@ print("Hello from MCP server!")</textarea>
             manager.listTools();
         }
         
-        function debugConnectionStatus() {
-            manager.debugConnectionStatus();
-        }
+                    function debugConnectionStatus() {
+                manager.debugConnectionStatus();
+            }
         
         function executeLastCell() {
             manager.executeLastCell();
@@ -616,16 +678,18 @@ print("Hello from MCP server!")</textarea>
         }
     </script>
     
-    <div class="instructions">
-        <h4>Test Instructions:</h4>
-        <ol>
-            <li><strong>Test Switching:</strong> Use the conversation switching buttons to see instant iframe reloading</li>
-            <li><strong>Test MCP Operations:</strong> Try adding markdown/code cells and executing them</li>
-            <li><strong>Watch the Magic:</strong> See how MCP server manipulates notebooks while iframe shows changes in real-time</li>
-            <li><strong>Enable Invisible Mode:</strong> See your real use case - background notebook execution</li>
-        </ol>
-        
-        <p><strong>This demonstrates:</strong> iframe switching + full MCP server capabilities = perfect solution for your platform!</p>
-    </div>
+            <div class="instructions">
+            <h4>Test Instructions:</h4>
+            <ol>
+                <li><strong>Test Switching:</strong> Use the conversation switching buttons to see instant iframe reloading</li>
+                <li><strong>Test MCP Operations:</strong> Try adding markdown/code cells and executing them</li>
+                <li><strong>✨ Test Automatic Image Handling:</strong> Execute the matplotlib code to see clean text + separate image data</li>
+                <li><strong>Watch the Magic:</strong> See how MCP server manipulates notebooks while iframe shows changes in real-time</li>
+                <li><strong>Enable Invisible Mode:</strong> See your real use case - background notebook execution</li>
+            </ol>
+            
+            <p><strong>🎯 DEFAULT BEHAVIOR:</strong> All MCP operations now return structured output with clean text for LLMs + separate base64 image data for platform processing!</p>
+            <p><strong>This demonstrates:</strong> iframe switching + full MCP server capabilities + automatic structured image handling = perfect solution for your platform!</p>
+        </div>
 </body>
 </html> 

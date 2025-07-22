@@ -13,7 +13,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, List
 
 import httpx
 from mcp.server import FastMCP
@@ -27,7 +27,7 @@ from jupyter_mcp_server.server import (
     __wait_for_cell_content_change, __safe_notebook_operation,
     __wait_for_kernel_idle
 )
-from jupyter_mcp_server.utils import extract_output, safe_extract_outputs, truncate_output
+from jupyter_mcp_server.utils import extract_output, safe_extract_outputs, truncate_output, extract_image_info, safe_extract_outputs_with_images
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ async def overwrite_cell_source(cell_index: int, cell_source: str) -> str:
 
 
 
-async def append_execute_code_cell(cell_source: str, full_output: bool = False) -> list[str]:
+async def append_execute_code_cell(cell_source: str, full_output: bool = False) -> Dict[str, Any]:
     """Append at the end of the notebook a code cell with the provided source and execute it.
 
     Args:
@@ -233,7 +233,7 @@ async def append_execute_code_cell(cell_source: str, full_output: bool = False) 
         full_output: If True, return complete execution outputs without truncation (default False)
 
     Returns:
-        list[str]: List of outputs from the executed cell (truncated by default to 1000 chars for LLM context efficiency)
+        dict: Cell object with cell_index, cell_id, content, output, and images
     """
     async def _append_execute():
         await __ensure_kernel_alive()
@@ -248,16 +248,34 @@ async def append_execute_code_cell(cell_source: str, full_output: bool = False) 
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
         
-        # Now safely read the execution outputs
+        # Now safely read the execution outputs with structured image handling
         ydoc = server_module.notebook_connection._doc
-        outputs = ydoc._ycells[cell_index]["outputs"]
-        return safe_extract_outputs(outputs, full_output)
+        cell = ydoc._ycells[cell_index]
+        outputs = cell["outputs"]
+        output_data = safe_extract_outputs_with_images(outputs, full_output)
+        
+        # Get cell ID if available
+        cell_id = str(cell.get("id", f"cell-{cell_index}"))
+        
+        # Ensure content is serializable
+        content = cell_source
+        if hasattr(content, 'to_py'):
+            content = content.to_py()
+        content = str(content)
+        
+        return {
+            "cell_index": cell_index,
+            "cell_id": cell_id,
+            "content": content,
+            "output": output_data["text_outputs"],
+            "images": output_data["images"]
+        }
     
     return await __safe_notebook_operation(_append_execute)
 
 
 
-async def insert_execute_code_cell(cell_index: int, cell_source: str, full_output: bool = False) -> list[str]:
+async def insert_execute_code_cell(cell_index: int, cell_source: str, full_output: bool = False) -> Dict[str, Any]:
     """Insert and execute a code cell in a Jupyter notebook.
 
     Args:
@@ -266,7 +284,7 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str, full_outpu
         full_output: If True, return complete execution outputs without truncation (default False)
 
     Returns:
-        list[str]: List of outputs from the executed cell (truncated by default to 1000 chars for LLM context efficiency)
+        dict: Cell object with cell_index, cell_id, content, output, and images
     """
     async def _insert_execute():
         await __ensure_kernel_alive()
@@ -281,23 +299,41 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str, full_outpu
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
         
-        # Now safely read the execution outputs
+        # Now safely read the execution outputs with structured image handling
         ydoc = server_module.notebook_connection._doc
-        outputs = ydoc._ycells[cell_index]["outputs"]
-        return safe_extract_outputs(outputs, full_output)
+        cell = ydoc._ycells[cell_index]
+        outputs = cell["outputs"]
+        output_data = safe_extract_outputs_with_images(outputs, full_output)
+        
+        # Get cell ID if available
+        cell_id = str(cell.get("id", f"cell-{cell_index}"))
+        
+        # Ensure content is serializable
+        content = cell_source
+        if hasattr(content, 'to_py'):
+            content = content.to_py()
+        content = str(content)
+        
+        return {
+            "cell_index": cell_index,
+            "cell_id": cell_id,
+            "content": content,
+            "output": output_data["text_outputs"],
+            "images": output_data["images"]
+        }
     
     return await __safe_notebook_operation(_insert_execute)
 
 
 
-async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> list[str]:
+async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> Dict[str, Any]:
     """Execute a specific cell with timeout and progress monitoring.
     Args:
         cell_index: Index of the cell to execute (0-based)
         timeout_seconds: Maximum time to wait for execution (default: 300s)
         full_output: If True, return complete execution outputs without truncation (default False)
     Returns:
-        list[str]: List of outputs from the executed cell (truncated by default to 1000 chars for LLM context efficiency)
+        dict: {'text_outputs': list[str], 'images': list[dict]} - Clean text outputs and structured image data
     """
     async def _execute():
         await __ensure_kernel_alive()
@@ -322,12 +358,12 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
             # Wait for outputs to be available
             await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
 
-            # Get final outputs
+            # Get final outputs with structured image handling
             ydoc = server_module.notebook_connection._doc
             outputs = ydoc._ycells[cell_index]["outputs"]
-            result = safe_extract_outputs(outputs, full_output)
+            result = safe_extract_outputs_with_images(outputs, full_output)
             
-            logger.info(f"Cell {cell_index} completed successfully with {len(result)} outputs")
+            logger.info(f"Cell {cell_index} completed successfully with {len(result['text_outputs'])} text outputs and {len(result['images'])} images")
             return result
             
         except asyncio.TimeoutError as e:
@@ -343,13 +379,16 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
             try:
                 ydoc = server_module.notebook_connection._doc
                 outputs = ydoc._ycells[cell_index].get("outputs", [])
-                partial_outputs = safe_extract_outputs(outputs, full_output)
-                partial_outputs.append(f"[TIMEOUT ERROR: Execution exceeded {timeout_seconds} seconds]")
-                return partial_outputs
+                partial_result = safe_extract_outputs_with_images(outputs, full_output)
+                partial_result["text_outputs"].append(f"[TIMEOUT ERROR: Execution exceeded {timeout_seconds} seconds]")
+                return partial_result
             except Exception:
                 pass
             
-            return [f"[TIMEOUT ERROR: Cell execution exceeded {timeout_seconds} seconds and was interrupted]"]
+            return {
+                "text_outputs": [f"[TIMEOUT ERROR: Cell execution exceeded {timeout_seconds} seconds and was interrupted]"],
+                "images": []
+            }
             
         except Exception as e:
             logger.error(f"Error executing cell {cell_index}: {e}")
@@ -359,7 +398,7 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
 
 # Simpler real-time monitoring without forced sync
 
-async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> list[str]:
+async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> Dict[str, Any]:
     """Execute a cell with simple timeout (no forced real-time sync). To be used for short-running cells.
     This won't force real-time updates but will work reliably.
     
@@ -369,7 +408,7 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
         full_output: If True, return complete execution outputs without truncation (default False)
         
     Returns:
-        list[str]: List of outputs from the executed cell (truncated by default to 1000 chars for LLM context efficiency)
+        dict: {'text_outputs': list[str], 'images': list[dict]} - Clean text outputs and structured image data
     """
     async def _execute():
         await __ensure_kernel_alive()
@@ -390,9 +429,9 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
 
-        # Get final outputs
+        # Get final outputs with structured image handling
         outputs = ydoc._ycells[cell_index]["outputs"]
-        result = safe_extract_outputs(outputs, full_output)
+        result = safe_extract_outputs_with_images(outputs, full_output)
         
         logger.info(f"Cell {cell_index} completed successfully")
         return result
@@ -491,15 +530,14 @@ async def execute_cell_streaming(cell_index: int, timeout_seconds: int = 300, pr
     return await __safe_notebook_operation(_execute_streaming, max_retries=1)
 
 
-async def read_all_cells(full_output: bool = False) -> list[dict[str, Union[str, int, list[str]]]]:
-    """Read all cells from the Jupyter notebook.
+async def read_all_cells(full_output: bool = False) -> List[Dict[str, Any]]:
+    """Read all cells from the Jupyter notebook with clean structured format.
     
     Args:
         full_output: If True, return complete cell outputs without truncation (default False)
         
     Returns:
-        list[dict]: List of cell information including index, type, source,
-                    and outputs (for code cells). Outputs are truncated by default to 1000 chars.
+        List[Dict[str, Any]]: Array of cell objects with consistent structure
     """
     async def _read_all():
         # Use persistent connection instead of creating new one
@@ -509,19 +547,36 @@ async def read_all_cells(full_output: bool = False) -> list[dict[str, Union[str,
         cells = []
 
         for i, cell in enumerate(ydoc._ycells):
+            # Get cell ID if available (some Jupyter implementations have this)
+            cell_id = str(cell.get("id", f"cell-{i}"))
+            
+            # Ensure content is properly serializable
+            content = cell.get("source", "")
+            if hasattr(content, 'to_py'):
+                # Handle pycrdt Text objects
+                content = content.to_py()
+            if isinstance(content, list):
+                content = ''.join(str(item) for item in content)
+            else:
+                content = str(content)
+            
             cell_info = {
-                "index": i,
-                "type": cell.get("cell_type", "unknown"),
-                "source": cell.get("source", ""),
+                "cell_index": i,
+                "cell_id": cell_id,
+                "content": content,
+                "output": [],
+                "images": []
             }
 
-            # Add outputs for code cells
+            # Add outputs for code cells with structured image handling
             if cell.get("cell_type") == "code":
                 try:
                     outputs = cell.get("outputs", [])
-                    cell_info["outputs"] = safe_extract_outputs(outputs, full_output)
+                    output_data = safe_extract_outputs_with_images(outputs, full_output)
+                    cell_info["output"] = output_data["text_outputs"]
+                    cell_info["images"] = output_data["images"]
                 except Exception as e:
-                    cell_info["outputs"] = [f"[Error reading outputs: {str(e)}]"]
+                    cell_info["output"] = [f"[Error reading outputs: {str(e)}]"]
 
             cells.append(cell_info)
 
@@ -531,12 +586,12 @@ async def read_all_cells(full_output: bool = False) -> list[dict[str, Union[str,
 
 
 
-async def read_cell(cell_index: int) -> dict[str, Union[str, int, list[str]]]:
-    """Read a specific cell from the Jupyter notebook.
+async def read_cell(cell_index: int) -> Dict[str, Any]:
+    """Read a specific cell from the Jupyter notebook with clean structured format.
     Args:
         cell_index: Index of the cell to read (0-based)
     Returns:
-        dict: Cell information including index, type, source, and outputs (for code cells)
+        dict: Cell object with cell_index, cell_id, content, output, and images
     """
     async def _read_cell():
         # Use persistent connection instead of creating new one
@@ -550,19 +605,36 @@ async def read_cell(cell_index: int) -> dict[str, Union[str, int, list[str]]]:
             )
 
         cell = ydoc._ycells[cell_index]
+        
+        # Get cell ID if available
+        cell_id = str(cell.get("id", f"cell-{cell_index}"))
+        
+        # Ensure content is properly serializable
+        content = cell.get("source", "")
+        if hasattr(content, 'to_py'):
+            content = content.to_py()
+        if isinstance(content, list):
+            content = ''.join(str(item) for item in content)
+        else:
+            content = str(content)
+        
         cell_info = {
-            "index": cell_index,
-            "type": cell.get("cell_type", "unknown"),
-            "source": cell.get("source", ""),
+            "cell_index": cell_index,
+            "cell_id": cell_id,
+            "content": content,
+            "output": [],
+            "images": []
         }
 
-        # Add outputs for code cells.
+        # Add outputs for code cells with structured image handling
         if cell.get("cell_type") == "code":
             try:
                 outputs = cell.get("outputs", [])
-                cell_info["outputs"] = safe_extract_outputs(outputs)
+                output_data = safe_extract_outputs_with_images(outputs)
+                cell_info["output"] = output_data["text_outputs"]
+                cell_info["images"] = output_data["images"]
             except Exception as e:
-                cell_info["outputs"] = [f"[Error reading outputs: {str(e)}]"]
+                cell_info["output"] = [f"[Error reading outputs: {str(e)}]"]
 
         return cell_info
     
@@ -1229,6 +1301,7 @@ async def prepare_notebook(notebook_path: str) -> str:
     except Exception as e:
         logger.error(f"Error in prepare_notebook: {e}")
         return f"❌ **ERROR**: Failed to prepare notebook '{notebook_path}'. Error: {str(e)}"
+
 
 
 ###############################################################################

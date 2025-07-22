@@ -212,8 +212,13 @@ async def test_cell_reading_tools(client: MCPClient, results: TestResults):
         if cells:
             first_cell = cells[0]
             assert isinstance(first_cell, dict), "Each cell should be dict"
-            assert 'type' in first_cell, "Cell should have type"
-            assert 'source' in first_cell, "Cell should have source"
+            assert 'cell_index' in first_cell, "Cell should have cell_index"
+            assert 'cell_id' in first_cell, "Cell should have cell_id"
+            assert 'content' in first_cell, "Cell should have content"
+            assert 'output' in first_cell, "Cell should have output array"
+            assert 'images' in first_cell, "Cell should have images array"
+            assert isinstance(first_cell['output'], list), "Output should be list"
+            assert isinstance(first_cell['images'], list), "Images should be list"
         results.add_result("read_all_cells - Structure", True)
     except Exception as e:
         results.add_result("read_all_cells - Structure", False, str(e))
@@ -225,7 +230,8 @@ async def test_cell_reading_tools(client: MCPClient, results: TestResults):
         if cells:
             cell = await client.read_cell(0)
             assert isinstance(cell, dict), "Should return dict"
-            assert cell.get('type') == cells[0].get('type'), "Should match first cell type"
+            assert cell.get('cell_index') == cells[0].get('cell_index'), "Should match first cell index"
+            assert cell.get('cell_id') == cells[0].get('cell_id'), "Should match first cell ID"
         results.add_result("read_cell - Specific", True)
     except Exception as e:
         results.add_result("read_cell - Specific", False, str(e))
@@ -289,7 +295,7 @@ async def test_markdown_cell_tools(client: MCPClient, results: TestResults):
         
         # Verify the cell was inserted at the correct position with correct content
         inserted_cell = cells_after[1]
-        assert insert_content.strip() in str(inserted_cell.get('source', '')), "Inserted cell should have correct content"
+        assert insert_content.strip() in str(inserted_cell.get('content', '')), "Inserted cell should have correct content"
         results.add_result("insert_markdown_cell - Position", True)
     except Exception as e:
         results.add_result("insert_markdown_cell - Position", False, str(e))
@@ -305,9 +311,12 @@ async def test_code_cell_tools(client: MCPClient, results: TestResults):
     try:
         cells_before = await client.read_all_cells()
         simple_code = f"# Test {test_id}\nprint('Hello from test {test_id}')\nresult = 2 + 2\nprint(f'2 + 2 = {{result}}')"
-        outputs = await client.append_execute_code_cell(simple_code)
+        cell_result = await client.append_execute_code_cell(simple_code)
         cells_after = await client.read_all_cells()
-        assert isinstance(outputs, list), "Should return list of outputs"
+        assert isinstance(cell_result, dict), "Should return cell object"
+        assert 'cell_index' in cell_result, "Should have cell_index"
+        assert 'output' in cell_result, "Should have output array"
+        assert 'images' in cell_result, "Should have images array"
         assert len(cells_after) == len(cells_before) + 1, "Should have one more cell after append"
         results.add_result("append_execute_code_cell - Simple", True)
     except Exception as e:
@@ -330,9 +339,10 @@ print(f"Sum of squares: {{sum(squared)}}")
 print(f"Square root of 16: {{math.sqrt(16)}}")
 print(f"Current time: {{datetime.datetime.now().strftime('%H:%M:%S')}}")
 """
-        outputs = await client.append_execute_code_cell(complex_code)
+        cell_result = await client.append_execute_code_cell(complex_code)
         cells_after = await client.read_all_cells()
-        assert len(outputs) > 0, "Should have execution outputs"
+        assert isinstance(cell_result, dict), "Should return cell object"
+        assert len(cell_result.get('output', [])) > 0, "Should have execution outputs"
         assert len(cells_after) == len(cells_before) + 1, "Should have one more cell after append"
         results.add_result("append_execute_code_cell - Complex", True)
     except Exception as e:
@@ -345,8 +355,9 @@ print(f"Current time: {{datetime.datetime.now().strftime('%H:%M:%S')}}")
         # Insert at the end to avoid index issues
         insert_position = len(cells_before)
         insert_code = f"# Inserted code test {test_id}\nfor i in range(3):\n    print(f'Loop {{i}}: test {test_id}')"
-        outputs = await client.insert_execute_code_cell(insert_position, insert_code)
-        assert isinstance(outputs, list), "Should return execution outputs"
+        cell_result = await client.insert_execute_code_cell(insert_position, insert_code)
+        assert isinstance(cell_result, dict), "Should return cell object"
+        assert 'output' in cell_result, "Should have output array"
         cells_after = await client.read_all_cells()
         assert len(cells_after) > len(cells_before), "Should have more cells"
         results.add_result("insert_execute_code_cell - Position", True)
@@ -370,8 +381,13 @@ async def test_cell_execution_tools(client: MCPClient, results: TestResults):
     # Test 1: Execute with progress monitoring
     print_test("execute_cell_with_progress - Progress tracking")
     try:
-        outputs = await client.execute_with_progress(last_index)
-        assert isinstance(outputs, list), "Should return outputs list"
+        cell_result = await client.call_tool("execute_cell_with_progress", {
+            "cell_index": last_index,
+            "timeout_seconds": 60
+        })
+        assert isinstance(cell_result, dict), "Should return cell object"
+        assert 'cell_index' in cell_result, "Should have cell_index"
+        assert 'output' in cell_result, "Should have output array"
         results.add_result("execute_cell_with_progress - Progress", True)
     except Exception as e:
         results.add_result("execute_cell_with_progress - Progress", False, str(e))
@@ -385,10 +401,11 @@ async def test_cell_execution_tools(client: MCPClient, results: TestResults):
         cells = await client.read_all_cells()
         quick_index = len(cells) - 1
         
-        outputs = await client.call_tool("execute_cell_simple_timeout", {
+        cell_result = await client.call_tool("execute_cell_simple_timeout", {
             "cell_index": quick_index,
             "timeout_seconds": 30
         })
+        assert isinstance(cell_result, dict), "Should return cell object"
         results.add_result("execute_cell_simple_timeout - Basic", True)
     except Exception as e:
         results.add_result("execute_cell_simple_timeout - Basic", False, str(e))
@@ -416,8 +433,8 @@ async def test_cell_manipulation_tools(client: MCPClient, results: TestResults):
         for attempt in range(20):  # Max 2 seconds of polling
             updated_cells = await client.read_all_cells()
             updated_cell = updated_cells[target_index]
-            cell_source = str(updated_cell.get('source', ''))
-            if new_content.strip() in cell_source.strip():
+            cell_content = str(updated_cell.get('content', ''))
+            if new_content.strip() in cell_content.strip():
                 content_updated = True
                 break
             await asyncio.sleep(0.1)
@@ -657,9 +674,9 @@ async def test_output_truncation(client: MCPClient, results: TestResults):
     print_test("Short output - No truncation")
     try:
         short_code = f"print('Hello test {test_id}!')"
-        outputs = await client.append_execute_code_cell(short_code)
-        assert isinstance(outputs, list), "Should return list of outputs"
-        output_str = str(outputs)
+        cell_result = await client.append_execute_code_cell(short_code)
+        assert isinstance(cell_result, dict), "Should return cell object"
+        output_str = str(cell_result.get('output', []))
         assert "truncated" not in output_str.lower(), "Short output should not be truncated"
         results.add_result("Short output - No truncation", True)
     except Exception as e:
@@ -669,8 +686,8 @@ async def test_output_truncation(client: MCPClient, results: TestResults):
     print_test("Long output - Default truncation")
     try:
         long_code = f"print('x' * 2000)  # {test_id}"
-        truncated_outputs = await client.append_execute_code_cell(long_code)
-        output_str = str(truncated_outputs)
+        cell_result = await client.append_execute_code_cell(long_code)
+        output_str = str(cell_result.get('output', []))
         assert "truncated" in output_str.lower(), "Long output should be truncated by default"
         assert "full_output=True" in output_str, "Should show instruction for full output"
         results.add_result("Long output - Default truncation", True)
@@ -681,11 +698,11 @@ async def test_output_truncation(client: MCPClient, results: TestResults):
     print_test("Long output - Full output mode")
     try:
         long_code = f"print('y' * 1500)  # {test_id}"
-        full_outputs = await client.append_execute_code_cell(long_code, full_output=True)
-        truncated_outputs = await client.append_execute_code_cell(long_code, full_output=False)
+        full_result = await client.append_execute_code_cell(long_code, full_output=True)
+        truncated_result = await client.append_execute_code_cell(long_code, full_output=False)
         
-        full_str = str(full_outputs)
-        truncated_str = str(truncated_outputs)
+        full_str = str(full_result.get('output', []))
+        truncated_str = str(truncated_result.get('output', []))
         
         assert len(full_str) > len(truncated_str), "Full output should be longer than truncated"
         assert "truncated" in truncated_str.lower(), "Default should still truncate"
@@ -712,9 +729,9 @@ async def test_output_truncation(client: MCPClient, results: TestResults):
         full_outputs_found = False
         
         for cell_t, cell_f in zip(cells_truncated, cells_full):
-            if isinstance(cell_t, dict) and "outputs" in cell_t and cell_t["outputs"]:
-                cell_t_str = str(cell_t["outputs"])
-                cell_f_str = str(cell_f["outputs"])
+            if isinstance(cell_t, dict) and "output" in cell_t and cell_t["output"]:
+                cell_t_str = str(cell_t["output"])
+                cell_f_str = str(cell_f["output"])
                 if "truncated" in cell_t_str.lower():
                     truncated_outputs_found = True
                 if len(cell_f_str) >= len(cell_t_str):
@@ -734,15 +751,23 @@ async def test_output_truncation(client: MCPClient, results: TestResults):
         last_cell_index = len(cells) - 1
         
         # Test execution with truncation
-        truncated_result = await client.execute_cell_with_progress(last_cell_index, full_output=False)
-        full_result = await client.execute_cell_with_progress(last_cell_index, full_output=True)
+        truncated_result = await client.call_tool("execute_cell_with_progress", {
+            "cell_index": last_cell_index,
+            "timeout_seconds": 60,
+            "full_output": False
+        })
+        full_result = await client.call_tool("execute_cell_with_progress", {
+            "cell_index": last_cell_index,
+            "timeout_seconds": 60,
+            "full_output": True
+        })
         
-        truncated_str = str(truncated_result)
-        full_str = str(full_result)
+        truncated_str = str(truncated_result.get('output', []))
+        full_str = str(full_result.get('output', []))
         
         # At least one should show truncation behavior
-        assert isinstance(truncated_result, list), "Should return list of outputs"
-        assert isinstance(full_result, list), "Should return list of outputs"
+        assert isinstance(truncated_result, dict), "Should return cell object"
+        assert isinstance(full_result, dict), "Should return cell object"
         results.add_result("execute_cell_with_progress - Truncation", True)
     except Exception as e:
         results.add_result("execute_cell_with_progress - Truncation", False, str(e))
