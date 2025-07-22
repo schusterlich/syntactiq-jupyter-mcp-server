@@ -171,9 +171,14 @@ class MCPClient:
         """Get notebook information"""
         return await self.call_tool("get_notebook_info")
     
-    async def read_all_cells(self) -> List[Dict[str, Any]]:
-        """Read all cells from the notebook"""
-        result = await self.call_tool("read_all_cells")
+    async def read_all_cells(self, full_output: bool = False) -> List[Dict[str, Any]]:
+        """Read all cells from the notebook
+        
+        Args:
+            full_output: If True, return complete cell outputs without truncation (default False)
+        """
+        arguments = {"full_output": full_output}
+        result = await self.call_tool("read_all_cells", arguments)
         # Handle the {"result": [...]} format
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -206,9 +211,18 @@ class MCPClient:
         else:
             return str(result)
     
-    async def append_execute_code_cell(self, cell_source: str) -> List[str]:
-        """Add and execute a code cell at the end of the notebook"""
-        result = await self.call_tool("append_execute_code_cell", {"cell_source": cell_source})
+    async def append_execute_code_cell(self, cell_source: str, full_output: bool = False) -> List[str]:
+        """Add and execute a code cell at the end of the notebook
+        
+        Args:
+            cell_source: Code to execute
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
+        arguments = {
+            "cell_source": cell_source,
+            "full_output": full_output
+        }
+        result = await self.call_tool("append_execute_code_cell", arguments)
         # Process execution results
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -217,11 +231,18 @@ class MCPClient:
         else:
             return [result]
     
-    async def insert_execute_code_cell(self, cell_index: int, cell_source: str) -> List[str]:
-        """Insert and execute a code cell at a specific position"""
+    async def insert_execute_code_cell(self, cell_index: int, cell_source: str, full_output: bool = False) -> List[str]:
+        """Insert and execute a code cell at a specific position
+        
+        Args:
+            cell_index: Position to insert the cell
+            cell_source: Code to execute
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
         result = await self.call_tool("insert_execute_code_cell", {
             "cell_index": cell_index,
-            "cell_source": cell_source
+            "cell_source": cell_source,
+            "full_output": full_output
         })
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -230,11 +251,18 @@ class MCPClient:
         else:
             return [result]
     
-    async def execute_cell_with_progress(self, cell_index: int, timeout_seconds: int = 300) -> List[str]:
-        """Execute a cell with progress monitoring"""
+    async def execute_cell_with_progress(self, cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> List[str]:
+        """Execute a cell with progress monitoring
+        
+        Args:
+            cell_index: Index of cell to execute
+            timeout_seconds: Maximum execution time
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
         result = await self.call_tool("execute_cell_with_progress", {
             "cell_index": cell_index,
-            "timeout_seconds": timeout_seconds
+            "timeout_seconds": timeout_seconds,
+            "full_output": full_output
         })
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -243,11 +271,18 @@ class MCPClient:
         else:
             return [result]
     
-    async def execute_cell_simple_timeout(self, cell_index: int, timeout_seconds: int = 300) -> List[str]:
-        """Execute a cell with simple timeout"""
+    async def execute_cell_simple_timeout(self, cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> List[str]:
+        """Execute a cell with simple timeout
+        
+        Args:
+            cell_index: Index of cell to execute
+            timeout_seconds: Maximum execution time
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
         result = await self.call_tool("execute_cell_simple_timeout", {
             "cell_index": cell_index,
-            "timeout_seconds": timeout_seconds
+            "timeout_seconds": timeout_seconds,
+            "full_output": full_output
         })
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -256,12 +291,20 @@ class MCPClient:
         else:
             return [result]
     
-    async def execute_cell_streaming(self, cell_index: int, timeout_seconds: int = 300, progress_interval: int = 5) -> List[str]:
-        """Execute a cell with streaming progress updates"""
+    async def execute_cell_streaming(self, cell_index: int, timeout_seconds: int = 300, progress_interval: int = 5, full_output: bool = False) -> List[str]:
+        """Execute a cell with streaming progress updates
+        
+        Args:
+            cell_index: Index of cell to execute
+            timeout_seconds: Maximum execution time
+            progress_interval: Seconds between progress updates
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
         result = await self.call_tool("execute_cell_streaming", {
             "cell_index": cell_index,
             "timeout_seconds": timeout_seconds,
-            "progress_interval": progress_interval
+            "progress_interval": progress_interval,
+            "full_output": full_output
         })
         if isinstance(result, dict) and "result" in result:
             return result["result"]
@@ -342,11 +385,18 @@ class MCPClient:
         else:
             return str(result)
 
-    async def execute_with_progress(self, cell_index: int, timeout_seconds: int = 300) -> list:
-        """Execute a cell with progress monitoring"""
+    async def execute_with_progress(self, cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> list:
+        """Execute a cell with progress monitoring
+        
+        Args:
+            cell_index: Index of cell to execute
+            timeout_seconds: Maximum execution time
+            full_output: If True, return complete execution outputs without truncation (default False)
+        """
         result = await self.call_tool("execute_cell_with_progress", {
             "cell_index": cell_index,
-            "timeout_seconds": timeout_seconds
+            "timeout_seconds": timeout_seconds,
+            "full_output": full_output
         })
         if isinstance(result, list):
             return result

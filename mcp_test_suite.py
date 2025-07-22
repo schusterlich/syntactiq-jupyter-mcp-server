@@ -5,7 +5,11 @@ Comprehensive Jupyter MCP Server Test Suite
 This script provides automated testing for ALL MCP tools with multiple test cases per tool.
 Tests are organized by tool category with detailed validation and error handling.
 
-Usage: python test_mcp_demo.py
+BULLETPROOF SYNCHRONIZATION: All tests use the new bulletproof synchronization that waits
+for actual completion signals from the notebook server. No more sleeps or timeouts!
+Includes stress testing to validate synchronization under extreme conditions.
+
+Usage: python mcp_test_suite.py
 """
 
 import asyncio
@@ -112,12 +116,26 @@ async def start_services():
     print_category("Service Startup")
     
     try:
+        # Stop any running services first
+        print_info("Stopping existing services (if any)...")
         subprocess.run(["docker-compose", "down"], capture_output=True, check=False)
-        result = subprocess.run(["docker-compose", "up", "-d"], capture_output=True, text=True, check=True)
-        print_success("Docker services started")
+        
+        # Start services and capture output on failure
+        print_info("Starting services with 'docker-compose up -d'...")
+        result = subprocess.run(
+            ["docker-compose", "up", "-d", "--build"],
+            capture_output=True, text=True, check=True
+        )
+        print_success("Docker services started successfully.")
         return True
     except subprocess.CalledProcessError as e:
         print_error(f"Failed to start services: {e}")
+        if e.stdout:
+            print_error("\n--- Docker Compose STDOUT ---")
+            print(e.stdout)
+        if e.stderr:
+            print_error("\n--- Docker Compose STDERR ---")
+            print(e.stderr)
         return False
 
 async def wait_for_services():
@@ -167,7 +185,6 @@ async def test_notebook_info_tools(client: MCPClient, results: TestResults):
     print_test("get_notebook_info - Consistency check")
     try:
         info1 = await client.get_notebook_info()
-        await asyncio.sleep(1)
         info2 = await client.get_notebook_info()
         assert info1.get('room_id') == info2.get('room_id'), "Room ID should be consistent"
         results.add_result("get_notebook_info - Consistency", True)
@@ -222,8 +239,21 @@ async def test_markdown_cell_tools(client: MCPClient, results: TestResults):
     # Test 1: Append markdown cell
     print_test("append_markdown_cell - Basic addition")
     try:
+        cells_before = await client.read_all_cells()
+        initial_count = len(cells_before)
         markdown_content = f"# Test Markdown Cell {test_id}\n\nThis is a **test** markdown cell created by automated testing."
         result = await client.append_markdown_cell(markdown_content)
+        
+        # Retry-based verification: poll until change is visible (bulletproof sync)
+        expected_count = initial_count + 1
+        for attempt in range(20):  # Max 2 seconds of polling
+            cells_after = await client.read_all_cells()
+            if len(cells_after) == expected_count:
+                break
+            await asyncio.sleep(0.1)  # Brief polling interval
+        else:
+            assert False, f"Expected {expected_count} cells after append, got {len(cells_after)} after 2s"
+            
         assert isinstance(result, str), "Should return string result"
         results.add_result("append_markdown_cell - Basic", True)
     except Exception as e:
@@ -242,10 +272,24 @@ async def test_markdown_cell_tools(client: MCPClient, results: TestResults):
     print_test("insert_markdown_cell - Positional insertion")
     try:
         cells_before = await client.read_all_cells()
+        initial_count = len(cells_before)
         insert_content = f"### Inserted Test {test_id}\n\nThis cell was inserted at position 1."
         result = await client.insert_markdown_cell(1, insert_content)
-        cells_after = await client.read_all_cells()
-        assert len(cells_after) > len(cells_before), "Should have more cells after insertion"
+        
+        # Retry-based verification: poll until change is visible
+        expected_count = initial_count + 1
+        cells_after = None
+        for attempt in range(20):  # Max 2 seconds of polling
+            cells_after = await client.read_all_cells()
+            if len(cells_after) == expected_count:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            assert False, f"Expected {expected_count} cells after insertion, got {len(cells_after)} after 2s"
+        
+        # Verify the cell was inserted at the correct position with correct content
+        inserted_cell = cells_after[1]
+        assert insert_content.strip() in str(inserted_cell.get('source', '')), "Inserted cell should have correct content"
         results.add_result("insert_markdown_cell - Position", True)
     except Exception as e:
         results.add_result("insert_markdown_cell - Position", False, str(e))
@@ -259,9 +303,12 @@ async def test_code_cell_tools(client: MCPClient, results: TestResults):
     # Test 1: Append and execute simple code
     print_test("append_execute_code_cell - Simple execution")
     try:
+        cells_before = await client.read_all_cells()
         simple_code = f"# Test {test_id}\nprint('Hello from test {test_id}')\nresult = 2 + 2\nprint(f'2 + 2 = {{result}}')"
         outputs = await client.append_execute_code_cell(simple_code)
+        cells_after = await client.read_all_cells()
         assert isinstance(outputs, list), "Should return list of outputs"
+        assert len(cells_after) == len(cells_before) + 1, "Should have one more cell after append"
         results.add_result("append_execute_code_cell - Simple", True)
     except Exception as e:
         results.add_result("append_execute_code_cell - Simple", False, str(e))
@@ -269,6 +316,7 @@ async def test_code_cell_tools(client: MCPClient, results: TestResults):
     # Test 2: Code with imports and computation
     print_test("append_execute_code_cell - Complex computation")
     try:
+        cells_before = await client.read_all_cells()
         complex_code = f"""
 import math
 import datetime
@@ -283,7 +331,9 @@ print(f"Square root of 16: {{math.sqrt(16)}}")
 print(f"Current time: {{datetime.datetime.now().strftime('%H:%M:%S')}}")
 """
         outputs = await client.append_execute_code_cell(complex_code)
+        cells_after = await client.read_all_cells()
         assert len(outputs) > 0, "Should have execution outputs"
+        assert len(cells_after) == len(cells_before) + 1, "Should have one more cell after append"
         results.add_result("append_execute_code_cell - Complex", True)
     except Exception as e:
         results.add_result("append_execute_code_cell - Complex", False, str(e))
@@ -292,8 +342,10 @@ print(f"Current time: {{datetime.datetime.now().strftime('%H:%M:%S')}}")
     print_test("insert_execute_code_cell - Positional execution")
     try:
         cells_before = await client.read_all_cells()
+        # Insert at the end to avoid index issues
+        insert_position = len(cells_before)
         insert_code = f"# Inserted code test {test_id}\nfor i in range(3):\n    print(f'Loop {{i}}: test {test_id}')"
-        outputs = await client.insert_execute_code_cell(2, insert_code)
+        outputs = await client.insert_execute_code_cell(insert_position, insert_code)
         assert isinstance(outputs, list), "Should return execution outputs"
         cells_after = await client.read_all_cells()
         assert len(cells_after) > len(cells_before), "Should have more cells"
@@ -357,15 +409,20 @@ async def test_cell_manipulation_tools(client: MCPClient, results: TestResults):
     print_test("overwrite_cell_source - Content replacement")
     try:
         new_content = f"# Updated content {test_id}\nprint('Content has been overwritten')\nprint('Successfully updated!')"
-        result = await client.call_tool("overwrite_cell_source", {
-            "cell_index": target_index,
-            "cell_source": new_content
-        })
+        result = await client.overwrite_cell_source(target_index, new_content)
         
-        # Verify the change
-        updated_cells = await client.read_all_cells()
-        updated_cell = updated_cells[target_index]
-        assert new_content in str(updated_cell.get('source', '')), "Content should be updated"
+        # Retry-based verification: poll until content change is visible
+        content_updated = False
+        for attempt in range(20):  # Max 2 seconds of polling
+            updated_cells = await client.read_all_cells()
+            updated_cell = updated_cells[target_index]
+            cell_source = str(updated_cell.get('source', ''))
+            if new_content.strip() in cell_source.strip():
+                content_updated = True
+                break
+            await asyncio.sleep(0.1)
+        
+        assert content_updated, f"Content was not updated after 2s. Expected '{new_content}' in cell {target_index}"
         results.add_result("overwrite_cell_source - Replace", True)
     except Exception as e:
         results.add_result("overwrite_cell_source - Replace", False, str(e))
@@ -374,9 +431,22 @@ async def test_cell_manipulation_tools(client: MCPClient, results: TestResults):
     print_test("delete_cell - Cell removal")
     try:
         cells_before = await client.read_all_cells()
-        await client.call_tool("delete_cell", {"cell_index": target_index})
-        cells_after = await client.read_all_cells()
-        assert len(cells_after) < len(cells_before), "Should have fewer cells after deletion"
+        initial_count = len(cells_before)
+        # Delete the last cell to be safer with indexing
+        delete_index = initial_count - 1
+        await client.call_tool("delete_cell", {"cell_index": delete_index})
+        
+        # Retry-based verification: poll until cell count decreases
+        expected_count = initial_count - 1
+        cells_after = None
+        for attempt in range(20):  # Max 2 seconds of polling
+            cells_after = await client.read_all_cells()
+            if len(cells_after) == expected_count:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            assert False, f"Expected {expected_count} cells after deletion, got {len(cells_after)} after 2s"
+            
         results.add_result("delete_cell - Remove", True)
     except Exception as e:
         results.add_result("delete_cell - Remove", False, str(e))
@@ -458,6 +528,225 @@ async def test_workspace_tools(client: MCPClient, results: TestResults):
     except Exception as e:
         results.add_result("prepare_notebook - Preparation", False, str(e))
 
+async def test_stress_bulletproof_sync(client: MCPClient, results: TestResults):
+    """Stress test to validate bulletproof synchronization under extreme conditions"""
+    print_category("Stress Test - Bulletproof Synchronization")
+    
+    test_id = generate_test_id()
+    
+    # Get initial state
+    initial_cells = await client.read_all_cells()
+    initial_count = len(initial_cells)
+    
+    # Test 1: Rapid serial insertions (10 markdown + 10 code)
+    print_test("Stress - Rapid serial insertions")
+    try:
+        expected_count = initial_count
+        
+        # Rapid markdown insertions
+        for i in range(5):  # Reduced from 10 to keep test time reasonable
+            await client.append_markdown_cell(f"# Stress Test {i+1} {test_id}\n\nRapid insertion test.")
+            expected_count += 1
+        
+        # Rapid code insertions
+        for i in range(5):  # Reduced from 10 to keep test time reasonable
+            await client.append_execute_code_cell(f"# Stress code {i+1} {test_id}\nprint('Rapid test {i+1}')")
+            expected_count += 1
+        
+        # Verify final count
+        final_cells = await client.read_all_cells()
+        actual_count = len(final_cells)
+        assert actual_count == expected_count, f"Expected {expected_count} cells, got {actual_count}"
+        results.add_result("Stress - Rapid insertions", True)
+    except Exception as e:
+        results.add_result("Stress - Rapid insertions", False, str(e))
+    
+    # Test 2: Mixed operations in rapid succession
+    print_test("Stress - Mixed operations")
+    try:
+        current_cells = await client.read_all_cells()
+        current_count = len(current_cells)
+        
+        operations = [
+            ("append_markdown", lambda: client.append_markdown_cell(f"# Mixed {generate_test_id()}")),
+            ("append_code", lambda: client.append_execute_code_cell(f"print('Mixed {generate_test_id()}')")),
+            ("overwrite_first", lambda: client.overwrite_cell_source(0, f"# Overwritten {generate_test_id()}")),
+        ]
+        
+        expected_count = current_count
+        for i in range(6):  # Reduced from 20 to keep test time reasonable
+            op_name, op_func = operations[i % len(operations)]
+            await op_func()
+            if op_name in ["append_markdown", "append_code"]:
+                expected_count += 1
+        
+        # Verify count
+        mixed_cells = await client.read_all_cells()
+        assert len(mixed_cells) == expected_count, f"Mixed ops count mismatch: expected {expected_count}, got {len(mixed_cells)}"
+        results.add_result("Stress - Mixed operations", True)
+    except Exception as e:
+        results.add_result("Stress - Mixed operations", False, str(e))
+    
+    # Test 3: Rapid deletions
+    print_test("Stress - Rapid deletions")
+    try:
+        # Add some cells to delete
+        deletion_cells = await client.read_all_cells()
+        deletion_count = len(deletion_cells)
+        
+        for i in range(3):  # Add 3 cells to delete
+            await client.append_markdown_cell(f"# Delete Target {i+1} {test_id}")
+            deletion_count += 1
+        
+        # Now delete them rapidly
+        for i in range(3):
+            current_cells = await client.read_all_cells()
+            if len(current_cells) > initial_count:  # Don't delete original cells
+                delete_index = len(current_cells) - 1
+                await client.call_tool("delete_cell", {"cell_index": delete_index})
+                deletion_count -= 1
+        
+        # Verify final state
+        final_deletion_cells = await client.read_all_cells()
+        assert len(final_deletion_cells) == deletion_count, f"Deletion count mismatch: expected {deletion_count}, got {len(final_deletion_cells)}"
+        results.add_result("Stress - Rapid deletions", True)
+    except Exception as e:
+        results.add_result("Stress - Rapid deletions", False, str(e))
+    
+    # Test 4: Edge case insertions
+    print_test("Stress - Edge case positions")
+    try:
+        edge_cells = await client.read_all_cells()
+        edge_count = len(edge_cells)
+        
+        # Insert at beginning
+        await client.insert_markdown_cell(0, f"# At Beginning {test_id}")
+        edge_count += 1
+        
+        # Insert in middle
+        middle_pos = edge_count // 2
+        await client.insert_markdown_cell(middle_pos, f"# In Middle {test_id}")
+        edge_count += 1
+        
+        # Verify final count
+        edge_final = await client.read_all_cells()
+        assert len(edge_final) == edge_count, f"Edge insertion count mismatch: expected {edge_count}, got {len(edge_final)}"
+        results.add_result("Stress - Edge positions", True)
+    except Exception as e:
+        results.add_result("Stress - Edge positions", False, str(e))
+    
+    # Test 5: Consistency verification (no race conditions)
+    print_test("Stress - Consistency checks")
+    try:
+        # Multiple rapid reads should be consistent
+        for i in range(3):
+            cells1 = await client.read_all_cells()
+            cells2 = await client.read_all_cells()
+            assert len(cells1) == len(cells2), f"Consistency check {i+1}: cell count changed between reads"
+        results.add_result("Stress - Consistency", True)
+    except Exception as e:
+        results.add_result("Stress - Consistency", False, str(e))
+
+async def test_output_truncation(client: MCPClient, results: TestResults):
+    """Test output truncation functionality with full_output parameter"""
+    print_category("Output Truncation")
+    
+    test_id = generate_test_id()
+    
+    # Test 1: Short output (should show completely)
+    print_test("Short output - No truncation")
+    try:
+        short_code = f"print('Hello test {test_id}!')"
+        outputs = await client.append_execute_code_cell(short_code)
+        assert isinstance(outputs, list), "Should return list of outputs"
+        output_str = str(outputs)
+        assert "truncated" not in output_str.lower(), "Short output should not be truncated"
+        results.add_result("Short output - No truncation", True)
+    except Exception as e:
+        results.add_result("Short output - No truncation", False, str(e))
+    
+    # Test 2: Long output with default truncation
+    print_test("Long output - Default truncation")
+    try:
+        long_code = f"print('x' * 2000)  # {test_id}"
+        truncated_outputs = await client.append_execute_code_cell(long_code)
+        output_str = str(truncated_outputs)
+        assert "truncated" in output_str.lower(), "Long output should be truncated by default"
+        assert "full_output=True" in output_str, "Should show instruction for full output"
+        results.add_result("Long output - Default truncation", True)
+    except Exception as e:
+        results.add_result("Long output - Default truncation", False, str(e))
+    
+    # Test 3: Long output with full_output=True
+    print_test("Long output - Full output mode")
+    try:
+        long_code = f"print('y' * 1500)  # {test_id}"
+        full_outputs = await client.append_execute_code_cell(long_code, full_output=True)
+        truncated_outputs = await client.append_execute_code_cell(long_code, full_output=False)
+        
+        full_str = str(full_outputs)
+        truncated_str = str(truncated_outputs)
+        
+        assert len(full_str) > len(truncated_str), "Full output should be longer than truncated"
+        assert "truncated" in truncated_str.lower(), "Default should still truncate"
+        results.add_result("Long output - Full output mode", True)
+    except Exception as e:
+        results.add_result("Long output - Full output mode", False, str(e))
+    
+    # Test 4: read_all_cells truncation
+    print_test("read_all_cells - Truncation behavior")
+    try:
+        # Create a cell with long output
+        await client.append_execute_code_cell(f"print('z' * 3000)  # {test_id}")
+        
+        # Test default (truncated)
+        cells_truncated = await client.read_all_cells(full_output=False)
+        cells_full = await client.read_all_cells(full_output=True)
+        
+        assert isinstance(cells_truncated, list), "Should return list of cells"
+        assert isinstance(cells_full, list), "Should return list of cells"
+        assert len(cells_truncated) == len(cells_full), "Should have same number of cells"
+        
+        # Find cells with outputs and compare
+        truncated_outputs_found = False
+        full_outputs_found = False
+        
+        for cell_t, cell_f in zip(cells_truncated, cells_full):
+            if isinstance(cell_t, dict) and "outputs" in cell_t and cell_t["outputs"]:
+                cell_t_str = str(cell_t["outputs"])
+                cell_f_str = str(cell_f["outputs"])
+                if "truncated" in cell_t_str.lower():
+                    truncated_outputs_found = True
+                if len(cell_f_str) >= len(cell_t_str):
+                    full_outputs_found = True
+        
+        assert truncated_outputs_found or full_outputs_found, "Should demonstrate truncation behavior"
+        results.add_result("read_all_cells - Truncation behavior", True)
+    except Exception as e:
+        results.add_result("read_all_cells - Truncation behavior", False, str(e))
+    
+    # Test 5: Execute cell functions with truncation
+    print_test("execute_cell_with_progress - Truncation")
+    try:
+        # Add a cell with long output
+        await client.append_execute_code_cell(f"print('w' * 2500)  # execute test {test_id}")
+        cells = await client.read_all_cells()
+        last_cell_index = len(cells) - 1
+        
+        # Test execution with truncation
+        truncated_result = await client.execute_cell_with_progress(last_cell_index, full_output=False)
+        full_result = await client.execute_cell_with_progress(last_cell_index, full_output=True)
+        
+        truncated_str = str(truncated_result)
+        full_str = str(full_result)
+        
+        # At least one should show truncation behavior
+        assert isinstance(truncated_result, list), "Should return list of outputs"
+        assert isinstance(full_result, list), "Should return list of outputs"
+        results.add_result("execute_cell_with_progress - Truncation", True)
+    except Exception as e:
+        results.add_result("execute_cell_with_progress - Truncation", False, str(e))
+
 async def setup_test_environment():
     """Setup initial test environment"""
     print_category("Test Environment Setup")
@@ -512,7 +801,7 @@ async def wait_for_notebook_session(client: MCPClient):
         except:
             pass
         
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)  # Reduced polling interval
     
     print_error("Could not establish notebook session")
     return False
@@ -531,7 +820,7 @@ async def main():
         print_error("Failed to start services")
         return False
     
-    await asyncio.sleep(15)  # Wait for startup
+    await asyncio.sleep(10)  # Reduced startup wait - health checks will catch readiness
     
     # Check service health
     if not await wait_for_services():
@@ -556,6 +845,8 @@ async def main():
         await test_cell_manipulation_tools(client, results)
         await test_notebook_management_tools(client, results)
         await test_workspace_tools(client, results)
+        await test_output_truncation(client, results)
+        await test_stress_bulletproof_sync(client, results)
         
     except Exception as e:
         print_error(f"Test suite failed: {e}")

@@ -1,104 +1,57 @@
-# Jupyter MCP Server with Iframe Switching
-# =========================================
-# This setup enables:
-# 1. Real-time notebook control via MCP server
-# 2. Iframe-based notebook switching for web platforms
-# 3. Synchronized context between iframe and MCP operations
-# 4. Uses proven collaboration setup that actually works
-
-version: '3.8'
-
 services:
-  # JupyterLab Server with collaboration support (RESTORED WORKING VERSION)
   jupyterlab:
-    image: jupyter/datascience-notebook:latest
+    build:
+      context: .
+      dockerfile: jupyterlab.Dockerfile
     container_name: jupyter-mcp-jupyterlab
     ports:
       - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - JUPYTER_TOKEN=MY_TOKEN
-    volumes:
-      - ./notebooks:/home/jovyan/work
-      - jupyter_data:/home/jovyan
+    working_dir: /home/jovyan/
     command: >
-      bash -c "
-      pip install jupyterlab==4.4.1 jupyter-collaboration==4.0.2 ipykernel &&
-      pip uninstall -y pycrdt datalayer_pycrdt &&
-      pip install datalayer_pycrdt==0.12.17 &&
-      jupyter server extension enable --py jupyter_server_ydoc --sys-prefix &&
-      start-notebook.sh
-      --NotebookApp.token='MY_TOKEN'
-      --NotebookApp.password=''
-      --ServerApp.root_dir='/home/jovyan/work'
-      --ServerApp.allow_origin='*'
+      jupyter lab --port=8888 --ip=0.0.0.0 --allow-root --no-browser
+      --ServerApp.token='MY_TOKEN'
       --ServerApp.disable_check_xsrf=True
-      --ServerApp.tornado_settings='{\"headers\":{\"Content-Security-Policy\":\"frame-ancestors * file: data: blob:\"}}'
-      --ip=0.0.0.0
-      --port=8888
-      "
-    restart: unless-stopped
+      --ServerApp.allow_origin='*'
+      --ServerApp.allow_remote_access=True
+      --ServerApp.root_dir='/home/jovyan/'
+      --LabApp.collaborative=True
     networks:
       - jupyter-mcp-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8888/api || exit 1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:8888/api/kernelspecs?token=MY_TOKEN"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 120s  # Longer startup due to pip installs
+      start_period: 30s
 
-  # Jupyter MCP Server with streamable-http transport (RESTORED WORKING VERSION)
   jupyter-mcp-server:
-    build:
-      context: .
+    build: .
     container_name: jupyter-mcp-server
     ports:
       - "4040:4040"
     environment:
       - TRANSPORT=streamable-http
-      - PROVIDER=jupyter
-      - PORT=4040
-      
-      # Runtime configuration
       - RUNTIME_URL=http://jupyterlab:8888
-      - START_NEW_RUNTIME=true
-      - RUNTIME_TOKEN=MY_TOKEN
-      
-      # Room configuration (FIXED PATH)
       - ROOM_URL=http://jupyterlab:8888
-      - ROOM_ID=notebook.ipynb
+      - RUNTIME_TOKEN=MY_TOKEN
       - ROOM_TOKEN=MY_TOKEN
     depends_on:
       jupyterlab:
         condition: service_healthy
-    restart: unless-stopped
     networks:
       - jupyter-mcp-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:4040/api/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s  # Longer startup due to custom build
-
-volumes:
-  jupyter_data:
-    driver: local
+      test: ["CMD", "curl", "-f", "http://localhost:4040/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 networks:
   jupyter-mcp-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
-# Key URLs for iframe switching:
-# - Base JupyterLab: http://localhost:8888?token=MY_TOKEN
-# - Specific notebook: http://localhost:8888/lab/tree/path/to/notebook.ipynb?token=MY_TOKEN
-# - MCP Server: http://localhost:4040
-# - Test interface: http://localhost:8080/interactive_mcp_test.html (via python3 -m http.server)
-
-# Architecture:
-# [Web Platform] → iframe.src = JupyterLab URL → [JupyterLab Container]
-#        ↓                                              ↑
-# [MCP HTTP Calls] → [MCP Server Container] → RTC WebSocket API 
+    driver: bridge 

@@ -1,0 +1,32 @@
+# Jupyter MCP Server Requirements
+# Copyright (c) 2023-2024 Datalayer, Inc.
+# BSD 3-Clause License
+
+# Core MCP dependencies
+mcp[cli]>=1.10.1
+pydantic>=2.0.0
+uvicorn>=0.20.0
+click>=8.0.0
+fastapi>=0.100.0
+
+# Jupyter Core Dependencies (version-aligned for compatibility)
+jupyterlab==4.4.1
+jupyter-collaboration==4.0.2
+jupyter-server-ydoc==2.1.0
+ipykernel>=6.0.0
+
+# Jupyter Client Libraries
+jupyter-kernel-client>=0.7.3
+jupyter-nbmodel-client==0.13.5
+
+# HTTP Client
+httpx>=0.24.0
+
+# Development/Testing Dependencies (optional, for local development)
+pytest>=7.0.0
+mypy>=0.990
+ruff>=0.1.0
+
+# Note: CRDT compatibility is handled separately 
+# For Docker: datalayer_pycrdt==0.12.17 is installed after this requirements.txt
+# For local dev: run setup_dev_env.sh which handles pycrdt compatibility 

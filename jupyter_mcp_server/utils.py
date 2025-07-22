@@ -82,15 +82,46 @@ def strip_ansi_codes(text: str) -> str:
     return ansi_escape.sub('', text)
 
 
-def safe_extract_outputs(outputs: Any) -> list[str]:
+def truncate_output(output: str, full_output: bool = False) -> str:
+    """
+    Truncate output to be mindful of LLM context windows.
+    
+    Args:
+        output: The output string to potentially truncate
+        full_output: If True, return full output without truncation
+        
+    Returns:
+        str: Original or truncated output with clear indication if shortened
+    """
+    # Hard limit: ~10k LLM tokens = ~40k characters (protects against massive outputs like full databases)
+    MAX_CHARS = 40000
+    DEFAULT_CHARS = 1000
+    
+    limit = MAX_CHARS if full_output else DEFAULT_CHARS
+    
+    if len(output) <= limit:
+        return output
+    
+    # Truncate and add transparent indicator
+    truncated = output[:limit].rstrip()
+    remaining_chars = len(output) - len(truncated)
+    
+    if full_output:
+        return f"{truncated}\n\n... [Output truncated at 40k chars (safety limit) - {remaining_chars} more characters]"
+    else:
+        return f"{truncated}\n\n... [Output truncated - {remaining_chars} more characters. Use 'full_output=True' to see complete output, but only if you need to]"
+
+
+def safe_extract_outputs(outputs: Any, full_output: bool = False) -> list[str]:
     """
     Safely extract all outputs from a cell, handling CRDT structures.
     
     Args:
         outputs: Cell outputs (could be CRDT YArray or traditional list)
+        full_output: If True, return full outputs without truncation
         
     Returns:
-        list[str]: List of string representations of outputs
+        list[str]: List of string representations of outputs (potentially truncated)
     """
     if not outputs:
         return []
@@ -103,13 +134,15 @@ def safe_extract_outputs(outputs: Any) -> list[str]:
             for output in outputs:
                 extracted = extract_output(output)
                 if extracted:
-                    result.append(extracted)
+                    truncated = truncate_output(extracted, full_output)
+                    result.append(truncated)
         except Exception as e:
             result.append(f"[Error extracting output: {str(e)}]")
     else:
         # Handle single output or traditional list
         extracted = extract_output(outputs)
         if extracted:
-            result.append(extracted)
+            truncated = truncate_output(extracted, full_output)
+            result.append(truncated)
     
     return result
