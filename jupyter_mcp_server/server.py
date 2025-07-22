@@ -104,8 +104,6 @@ async def __ensure_notebook_connection():
     """Ensure notebook connection is alive, restart if needed."""
     global notebook_connection
     
-    logger.info(f"__ensure_notebook_connection called - current state: {notebook_connection is not None}")
-    
     if notebook_connection is None:
         logger.info("No notebook connection found, establishing new connection...")
         await __start_notebook_connection()
@@ -127,16 +125,13 @@ async def __ensure_notebook_connection():
     
     try:
         # Test if connection is still alive by accessing the document
-        logger.info(f"Testing existing connection: {type(notebook_connection)}")
-        logger.info(f"Connection has _doc attribute: {hasattr(notebook_connection, '_doc')}")
-        
         ydoc = notebook_connection._doc
-        logger.info(f"Document retrieved: {ydoc is not None}")
         
         if ydoc is None:
             raise Exception("Document is None")
         
-        logger.info(f"Document has {len(ydoc._ycells) if hasattr(ydoc, '_ycells') else 'unknown'} cells")
+        # Test that document has cells attribute
+        len(ydoc._ycells) if hasattr(ydoc, '_ycells') else 0
         
         # Connection seems alive
         logger.debug("Existing notebook connection verified as active")

@@ -230,8 +230,14 @@ async def test_cell_reading_tools(client: MCPClient, results: TestResults):
         if cells:
             cell = await client.read_cell(0)
             assert isinstance(cell, dict), "Should return dict"
-            assert cell.get('cell_index') == cells[0].get('cell_index'), "Should match first cell index"
-            assert cell.get('cell_id') == cells[0].get('cell_id'), "Should match first cell ID"
+            assert 'cell_index' in cell, "cell should have cell_index"
+            assert 'cell_id' in cell, "cell should have cell_id"
+            assert 'content' in cell, "cell should have content"
+            assert 'output' in cell, "cell should have output"
+            assert 'images' in cell, "cell should have images"
+            # Check that the values match
+            assert cell['cell_index'] == cells[0]['cell_index'], f"Expected cell_index {cells[0]['cell_index']}, got {cell.get('cell_index')}"
+            assert cell['cell_id'] == cells[0]['cell_id'], f"Expected cell_id {cells[0]['cell_id']}, got {cell.get('cell_id')}"
         results.add_result("read_cell - Specific", True)
     except Exception as e:
         results.add_result("read_cell - Specific", False, str(e))
@@ -381,13 +387,15 @@ async def test_cell_execution_tools(client: MCPClient, results: TestResults):
     # Test 1: Execute with progress monitoring
     print_test("execute_cell_with_progress - Progress tracking")
     try:
-        cell_result = await client.call_tool("execute_cell_with_progress", {
+        execution_result = await client.call_tool("execute_cell_with_progress", {
             "cell_index": last_index,
             "timeout_seconds": 60
         })
-        assert isinstance(cell_result, dict), "Should return cell object"
-        assert 'cell_index' in cell_result, "Should have cell_index"
-        assert 'output' in cell_result, "Should have output array"
+        assert isinstance(execution_result, dict), "Should return execution result object"
+        assert 'text_outputs' in execution_result, "Should have text_outputs array"
+        assert 'images' in execution_result, "Should have images array"
+        assert isinstance(execution_result['text_outputs'], list), "text_outputs should be list"
+        assert isinstance(execution_result['images'], list), "images should be list"
         results.add_result("execute_cell_with_progress - Progress", True)
     except Exception as e:
         results.add_result("execute_cell_with_progress - Progress", False, str(e))

@@ -113,7 +113,10 @@ class MCPClient:
                 # Extract the actual result data, preferring structuredContent over content
                 mcp_result = result.get("result", {})
                 if "structuredContent" in mcp_result:
-                    return self._process_structured_content(mcp_result["structuredContent"])
+                    structured = self._process_structured_content(mcp_result["structuredContent"])
+                    if isinstance(structured, dict) and "result" in structured:
+                        return structured["result"]
+                    return structured
                 elif "content" in mcp_result:
                     # Fallback to content parsing if no structuredContent
                     return self._process_content(mcp_result["content"])
@@ -211,45 +214,38 @@ class MCPClient:
         else:
             return str(result)
     
-    async def append_execute_code_cell(self, cell_source: str, full_output: bool = False) -> List[str]:
+    async def append_execute_code_cell(self, cell_source: str, full_output: bool = False) -> dict:
         """Add and execute a code cell at the end of the notebook
         
         Args:
             cell_source: Code to execute
             full_output: If True, return complete execution outputs without truncation (default False)
+            
+        Returns:
+            dict: Cell object with cell_index, cell_id, content, output, and images
         """
         arguments = {
             "cell_source": cell_source,
             "full_output": full_output
         }
-        result = await self.call_tool("append_execute_code_cell", arguments)
-        # Process execution results
-        if isinstance(result, dict) and "result" in result:
-            return result["result"]
-        elif isinstance(result, list):
-            return result
-        else:
-            return [result]
+        return await self.call_tool("append_execute_code_cell", arguments)
     
-    async def insert_execute_code_cell(self, cell_index: int, cell_source: str, full_output: bool = False) -> List[str]:
+    async def insert_execute_code_cell(self, cell_index: int, cell_source: str, full_output: bool = False) -> dict:
         """Insert and execute a code cell at a specific position
         
         Args:
             cell_index: Position to insert the cell
             cell_source: Code to execute
             full_output: If True, return complete execution outputs without truncation (default False)
+            
+        Returns:
+            dict: Cell object with cell_index, cell_id, content, output, and images
         """
-        result = await self.call_tool("insert_execute_code_cell", {
+        return await self.call_tool("insert_execute_code_cell", {
             "cell_index": cell_index,
             "cell_source": cell_source,
             "full_output": full_output
         })
-        if isinstance(result, dict) and "result" in result:
-            return result["result"]
-        elif isinstance(result, list):
-            return result
-        else:
-            return [result]
     
     async def execute_cell_with_progress(self, cell_index: int, timeout_seconds: int = 300, full_output: bool = False) -> List[str]:
         """Execute a cell with progress monitoring

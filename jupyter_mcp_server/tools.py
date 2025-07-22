@@ -648,24 +648,14 @@ async def get_notebook_info() -> dict[str, Union[str, int, dict[str, int]]]:
         dict: Notebook information including path, total cells, and cell type counts
     """
     async def _get_info():
-        logger.info("get_notebook_info: Starting execution")
-        
         # Use persistent connection instead of creating new one
-        logger.info("get_notebook_info: Calling __ensure_notebook_connection()")
         await __ensure_notebook_connection()
-        
-        logger.info(f"get_notebook_info: Connection state after ensure: {server_module.notebook_connection is not None}")
-        logger.info(f"get_notebook_info: Connection type: {type(server_module.notebook_connection) if server_module.notebook_connection else 'None'}")
         
         if server_module.notebook_connection is None:
             raise Exception("notebook_connection is None after __ensure_notebook_connection()")
         
-        logger.info("get_notebook_info: Accessing _doc attribute")
         ydoc = server_module.notebook_connection._doc
-        logger.info(f"get_notebook_info: Document retrieved: {ydoc is not None}")
-        
         total_cells: int = len(ydoc._ycells)
-        logger.info(f"get_notebook_info: Found {total_cells} cells")
 
         cell_types: dict[str, int] = {}
         for cell in ydoc._ycells:
@@ -678,7 +668,6 @@ async def get_notebook_info() -> dict[str, Union[str, int, dict[str, int]]]:
             "cell_types": cell_types,
         }
 
-        logger.info(f"get_notebook_info: Returning result: {info}")
         return info
     
     return await __safe_notebook_operation(_get_info)
