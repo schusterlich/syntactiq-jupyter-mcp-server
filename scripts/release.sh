@@ -74,8 +74,8 @@ fi
 
 # Step 1: Run tests
 log_info "Running comprehensive test suite..."
-if python mcp_test_suite.py > /dev/null 2>&1; then
-    log_success "All tests passed (30/30)"
+if python tests/mcp_test_suite.py > /dev/null 2>&1; then
+    log_success "All tests passed (59/59)"
 else
     log_error "Tests failed! Cannot proceed with release."
     exit 1
@@ -135,7 +135,7 @@ pip install dist/jupyter_mcp_server-$VERSION-py3-none-any.whl
 ## 🧪 Validation
 Run the test suite to validate installation:
 \`\`\`bash
-python mcp_test_suite.py
+python tests/mcp_test_suite.py
 \`\`\`
 
 ## 📋 Changes

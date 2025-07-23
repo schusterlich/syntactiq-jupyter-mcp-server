@@ -60,7 +60,7 @@ PROVIDER = "jupyter"
 ### Pre-deployment Testing
 ```bash
 # Run full test suite
-python mcp_test_suite.py
+python tests/mcp_test_suite.py
 
 # Quick validation
 ./scripts/release.sh 1.0.0 --test-only
@@ -238,7 +238,7 @@ docker-compose up -d --no-deps jupyter-mcp-server
 
 ### Bug Reporting
 1. Check version: `python -c "from jupyter_mcp_server import __version__; print(__version__)"`
-2. Run diagnostics: `python mcp_test_suite.py`
+2. Run diagnostics: `python tests/mcp_test_suite.py`
 3. Collect logs: `docker-compose logs jupyter-mcp-server`
 4. File issue with:
    - Version number

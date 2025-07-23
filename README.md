@@ -97,7 +97,7 @@ Open http://localhost:8888?token=MY_TOKEN in your browser to see real-time chang
 
 ```bash
 # Run full MCP integration tests (59 tests)
-python mcp_test_suite.py
+python tests/mcp_test_suite.py
 ```
 
 This comprehensive suite tests:
@@ -113,7 +113,7 @@ This comprehensive suite tests:
 
 ```bash
 # Run focused unit tests for detection logic
-python unit_test_suite.py
+python tests/unit_test_suite.py
 ```
 
 Tests the core detection algorithms:
@@ -477,10 +477,10 @@ See `agent_examples.py` for comprehensive agent development patterns.
 ./quick_start.sh
 
 # Run comprehensive tests
-python mcp_test_suite.py
+python tests/mcp_test_suite.py
 
 # Run unit tests
-python unit_test_suite.py
+python tests/unit_test_suite.py
 
 # Test with Python client
 python -c "
