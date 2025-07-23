@@ -73,6 +73,11 @@ Thumbs.db
 *.log
 logs/
 
+# Process ID files and runtime artifacts
+*.pid
+.http_server.pid
+.server.pid
+
 # Temporary files
 tmp/
 temp/

@@ -1,6 +1,54 @@
-BSD 3-Clause License
+Syntactiq Jupyter MCP Server - Proprietary Software
 
-Copyright (c) 2025, Datalayer
+Copyright (c) 2025, Syntactiq LLC
+All rights reserved.
+
+================================================================================
+PROPRIETARY LICENSE - ALL RIGHTS RESERVED
+================================================================================
+
+This software and associated documentation files (the "Software") are the 
+exclusive proprietary property of Syntactiq LLC.
+
+PROHIBITED USES:
+- NO PUBLIC USE: This software may not be used by any individual or entity 
+  other than Syntactiq LLC
+- NO DISTRIBUTION: This software may not be distributed, shared, or made 
+  available to any third party
+- NO DERIVATIVE WORKS: No derivative works may be created from this software
+- NO REVERSE ENGINEERING: Reverse engineering, decompilation, or disassembly 
+  is strictly prohibited
+- NO COMMERCIAL USE: No commercial use by any entity other than Syntactiq LLC
+- NO PERSONAL USE: No personal or individual use outside of Syntactiq LLC
+- NO OPEN SOURCE: This software is not open source and may not be treated as such
+
+AUTHORIZED USE:
+- This Software is licensed EXCLUSIVELY for internal use by Syntactiq LLC employees
+- Use is limited to Syntactiq's commercial products and services only
+- Any use requires explicit written authorization from Syntactiq LLC
+
+VIOLATION:
+Any unauthorized use, distribution, or access to this software constitutes a 
+violation of this license and may result in legal action.
+
+DISCLAIMER:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+SYNTACTIQ LLC BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================================
+THIRD-PARTY LICENSE ATTRIBUTION
+================================================================================
+
+Portions of this software are based on the original work by Datalayer, Inc.,
+which was released under the BSD 3-Clause License. The original BSD-licensed
+portions have been heavily modified and integrated into this proprietary system:
+
+BSD 3-Clause License
+Copyright (c) 2023-2024, Datalayer, Inc.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

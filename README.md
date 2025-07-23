@@ -1,4 +1,4 @@
-# 🪐✨ Jupyter MCP Server - Enhanced Edition
+# 🪐✨ Syntactiq Jupyter MCP Server
 
 **Real-time Jupyter Notebook control through the Model Context Protocol**
 
