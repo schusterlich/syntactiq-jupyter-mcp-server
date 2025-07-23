@@ -233,7 +233,7 @@ async def append_execute_code_cell(cell_source: str, full_output: bool = False) 
         full_output: If True, return complete execution outputs without truncation (default False)
 
     Returns:
-        dict: Cell object with cell_index, cell_id, content, output, and images
+        dict: Cell object with cell_index, cell_id, content, output, images, and conditional error/warning fields
     """
     async def _append_execute():
         await __ensure_kernel_alive()
@@ -248,7 +248,7 @@ async def append_execute_code_cell(cell_source: str, full_output: bool = False) 
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
         
-        # Now safely read the execution outputs with structured image handling
+        # Now safely read the execution outputs with structured image handling and error/warning detection
         ydoc = server_module.notebook_connection._doc
         cell = ydoc._ycells[cell_index]
         outputs = cell["outputs"]
@@ -263,13 +263,23 @@ async def append_execute_code_cell(cell_source: str, full_output: bool = False) 
             content = content.to_py()
         content = str(content)
         
-        return {
+        result = {
             "cell_index": cell_index,
             "cell_id": cell_id,
             "content": content,
             "output": output_data["text_outputs"],
             "images": output_data["images"]
         }
+        
+        # Add error field only if there's an error
+        if "error" in output_data:
+            result["error"] = output_data["error"]
+        
+        # Add warning field only if there's a warning
+        if "warning" in output_data:
+            result["warning"] = output_data["warning"]
+        
+        return result
     
     return await __safe_notebook_operation(_append_execute)
 
@@ -284,7 +294,7 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str, full_outpu
         full_output: If True, return complete execution outputs without truncation (default False)
 
     Returns:
-        dict: Cell object with cell_index, cell_id, content, output, and images
+        dict: Cell object with cell_index, cell_id, content, output, images, and conditional error/warning fields
     """
     async def _insert_execute():
         await __ensure_kernel_alive()
@@ -299,7 +309,7 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str, full_outpu
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
         
-        # Now safely read the execution outputs with structured image handling
+        # Now safely read the execution outputs with structured image handling and error/warning detection
         ydoc = server_module.notebook_connection._doc
         cell = ydoc._ycells[cell_index]
         outputs = cell["outputs"]
@@ -314,13 +324,23 @@ async def insert_execute_code_cell(cell_index: int, cell_source: str, full_outpu
             content = content.to_py()
         content = str(content)
         
-        return {
+        result = {
             "cell_index": cell_index,
             "cell_id": cell_id,
             "content": content,
             "output": output_data["text_outputs"],
             "images": output_data["images"]
         }
+        
+        # Add error field only if there's an error
+        if "error" in output_data:
+            result["error"] = output_data["error"]
+        
+        # Add warning field only if there's a warning
+        if "warning" in output_data:
+            result["warning"] = output_data["warning"]
+        
+        return result
     
     return await __safe_notebook_operation(_insert_execute)
 
@@ -333,7 +353,7 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
         timeout_seconds: Maximum time to wait for execution (default: 300s)
         full_output: If True, return complete execution outputs without truncation (default False)
     Returns:
-        dict: {'text_outputs': list[str], 'images': list[dict]} - Clean text outputs and structured image data
+        dict: {'text_outputs': list[str], 'images': list[dict], 'error': dict, 'warning': dict} - Clean text outputs, structured image data, and conditional error/warning info
     """
     async def _execute():
         await __ensure_kernel_alive()
@@ -358,7 +378,7 @@ async def execute_cell_with_progress(cell_index: int, timeout_seconds: int = 300
             # Wait for outputs to be available
             await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
 
-            # Get final outputs with structured image handling
+            # Get final outputs with structured image handling and error/warning detection
             ydoc = server_module.notebook_connection._doc
             outputs = ydoc._ycells[cell_index]["outputs"]
             result = safe_extract_outputs_with_images(outputs, full_output)
@@ -408,7 +428,7 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
         full_output: If True, return complete execution outputs without truncation (default False)
         
     Returns:
-        dict: {'text_outputs': list[str], 'images': list[dict]} - Clean text outputs and structured image data
+        dict: {'text_outputs': list[str], 'images': list[dict], 'error': dict, 'warning': dict} - Clean text outputs, structured image data, and conditional error/warning info
     """
     async def _execute():
         await __ensure_kernel_alive()
@@ -429,7 +449,7 @@ async def execute_cell_simple_timeout(cell_index: int, timeout_seconds: int = 30
         # Wait for outputs to be available
         await __wait_for_execution_outputs(server_module.notebook_connection, cell_index)
 
-        # Get final outputs with structured image handling
+        # Get final outputs with structured image handling and error/warning detection
         outputs = ydoc._ycells[cell_index]["outputs"]
         result = safe_extract_outputs_with_images(outputs, full_output)
         
@@ -537,7 +557,7 @@ async def read_all_cells(full_output: bool = False) -> List[Dict[str, Any]]:
         full_output: If True, return complete cell outputs without truncation (default False)
         
     Returns:
-        List[Dict[str, Any]]: Array of cell objects with consistent structure
+        List[Dict[str, Any]]: Array of cell objects with consistent structure including conditional error/warning fields
     """
     async def _read_all():
         # Use persistent connection instead of creating new one
@@ -568,13 +588,22 @@ async def read_all_cells(full_output: bool = False) -> List[Dict[str, Any]]:
                 "images": []
             }
 
-            # Add outputs for code cells with structured image handling
+            # Add outputs for code cells with structured image handling and error/warning detection
             if cell.get("cell_type") == "code":
                 try:
                     outputs = cell.get("outputs", [])
                     output_data = safe_extract_outputs_with_images(outputs, full_output)
                     cell_info["output"] = output_data["text_outputs"]
                     cell_info["images"] = output_data["images"]
+                    
+                    # Add error field only if there's an error
+                    if "error" in output_data:
+                        cell_info["error"] = output_data["error"]
+                    
+                    # Add warning field only if there's a warning
+                    if "warning" in output_data:
+                        cell_info["warning"] = output_data["warning"]
+                        
                 except Exception as e:
                     cell_info["output"] = [f"[Error reading outputs: {str(e)}]"]
 
@@ -591,7 +620,7 @@ async def read_cell(cell_index: int) -> Dict[str, Any]:
     Args:
         cell_index: Index of the cell to read (0-based)
     Returns:
-        dict: Cell object with cell_index, cell_id, content, output, and images
+        dict: Cell object with cell_index, cell_id, content, output, images, and conditional error/warning fields
     """
     async def _read_cell():
         # Use persistent connection instead of creating new one
@@ -626,13 +655,22 @@ async def read_cell(cell_index: int) -> Dict[str, Any]:
             "images": []
         }
 
-        # Add outputs for code cells with structured image handling
+        # Add outputs for code cells with structured image handling and error/warning detection
         if cell.get("cell_type") == "code":
             try:
                 outputs = cell.get("outputs", [])
                 output_data = safe_extract_outputs_with_images(outputs)
                 cell_info["output"] = output_data["text_outputs"]
                 cell_info["images"] = output_data["images"]
+                
+                # Add error field only if there's an error
+                if "error" in output_data:
+                    cell_info["error"] = output_data["error"]
+                
+                # Add warning field only if there's a warning
+                if "warning" in output_data:
+                    cell_info["warning"] = output_data["warning"]
+                    
             except Exception as e:
                 cell_info["output"] = [f"[Error reading outputs: {str(e)}]"]
 

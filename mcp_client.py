@@ -179,6 +179,9 @@ class MCPClient:
         
         Args:
             full_output: If True, return complete cell outputs without truncation (default False)
+            
+        Returns:
+            List[Dict[str, Any]]: Array of cell objects with conditional error/warning fields
         """
         arguments = {"full_output": full_output}
         result = await self.call_tool("read_all_cells", arguments)
@@ -191,7 +194,14 @@ class MCPClient:
             return [result] if result else []
     
     async def read_cell(self, cell_index: int) -> Dict[str, Any]:
-        """Read a specific cell"""
+        """Read a specific cell
+        
+        Args:
+            cell_index: Index of the cell to read (0-based)
+            
+        Returns:
+            Dict[str, Any]: Cell object with conditional error/warning fields
+        """
         return await self.call_tool("read_cell", {"cell_index": cell_index})
     
     async def append_markdown_cell(self, cell_source: str) -> str:
@@ -222,7 +232,7 @@ class MCPClient:
             full_output: If True, return complete execution outputs without truncation (default False)
             
         Returns:
-            dict: Cell object with cell_index, cell_id, content, output, and images
+            dict: Cell object with cell_index, cell_id, content, output, images, and conditional error/warning fields
         """
         arguments = {
             "cell_source": cell_source,
@@ -239,7 +249,7 @@ class MCPClient:
             full_output: If True, return complete execution outputs without truncation (default False)
             
         Returns:
-            dict: Cell object with cell_index, cell_id, content, output, and images
+            dict: Cell object with cell_index, cell_id, content, output, images, and conditional error/warning fields
         """
         return await self.call_tool("insert_execute_code_cell", {
             "cell_index": cell_index,
@@ -413,3 +423,89 @@ class MCPClient:
             return result["result"]
         else:
             return result 
+    
+    # Utility methods for error and warning detection
+    
+    def has_error(self, cell_data: Dict[str, Any]) -> bool:
+        """Check if a cell has an error
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            bool: True if the cell has an error
+        """
+        return isinstance(cell_data, dict) and "error" in cell_data and cell_data["error"] is not None
+    
+    def has_warning(self, cell_data: Dict[str, Any]) -> bool:
+        """Check if a cell has a warning
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            bool: True if the cell has a warning
+        """
+        return isinstance(cell_data, dict) and "warning" in cell_data and cell_data["warning"] is not None
+    
+    def has_execution_issues(self, cell_data: Dict[str, Any]) -> bool:
+        """Check if a cell has any execution issues (errors or warnings)
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            bool: True if the cell has errors or warnings
+        """
+        return self.has_error(cell_data) or self.has_warning(cell_data)
+    
+    def get_error_info(self, cell_data: Dict[str, Any]) -> Dict[str, str]:
+        """Get error information from a cell
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            dict: Error info with 'type' and 'message' keys, or None if no error
+        """
+        if self.has_error(cell_data):
+            return cell_data["error"]
+        return None
+    
+    def get_warning_info(self, cell_data: Dict[str, Any]) -> Dict[str, str]:
+        """Get warning information from a cell
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            dict: Warning info with 'type' and 'message' keys, or None if no warning
+        """
+        if self.has_warning(cell_data):
+            return cell_data["warning"]
+        return None
+    
+    def get_execution_summary(self, cell_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get a summary of cell execution status
+        
+        Args:
+            cell_data: Cell object returned from execute or read operations
+            
+        Returns:
+            dict: Summary with execution status information
+        """
+        summary = {
+            "has_error": self.has_error(cell_data),
+            "has_warning": self.has_warning(cell_data),
+            "has_output": isinstance(cell_data, dict) and len(cell_data.get("output", [])) > 0,
+            "has_images": isinstance(cell_data, dict) and len(cell_data.get("images", [])) > 0,
+            "cell_index": cell_data.get("cell_index") if isinstance(cell_data, dict) else None
+        }
+        
+        if summary["has_error"]:
+            summary["error"] = self.get_error_info(cell_data)
+        
+        if summary["has_warning"]:
+            summary["warning"] = self.get_warning_info(cell_data)
+        
+        return summary 

@@ -3,7 +3,51 @@
 # BSD 3-Clause License
 
 import re
-from typing import Any, Union
+from typing import Any, Union, Optional, Dict, List
+
+
+# Error and Warning Detection Constants
+ERROR_PATTERNS = {
+    'syntax_error': r'\bSyntaxError\s*:\s*(.+)',
+    'name_error': r'\bNameError\s*:\s*(.+)', 
+    'type_error': r'\bTypeError\s*:\s*(.+)',
+    'value_error': r'\bValueError\s*:\s*(.+)',
+    'attribute_error': r'\bAttributeError\s*:\s*(.+)',
+    'key_error': r'\bKeyError\s*:\s*(.+)',
+    'index_error': r'\bIndexError\s*:\s*(.+)',
+    'zero_division_error': r'\bZeroDivisionError\s*:\s*(.+)',
+    'file_not_found_error': r'\bFileNotFoundError\s*:\s*(.+)',
+    'permission_error': r'\bPermissionError\s*:\s*(.+)',
+    'import_error': r'\bImportError\s*:\s*(.+)',
+    'module_not_found_error': r'\bModuleNotFoundError\s*:\s*(.+)',
+    'runtime_error': r'\bRuntimeError\s*:\s*(.+)',
+    'assertion_error': r'\bAssertionError\s*:\s*(.+)',
+    'connection_error': r'\bConnectionError\s*:\s*(.+)',
+    'timeout_error': r'\bTimeoutError\s*:\s*(.+)',
+    'memory_error': r'\bMemoryError\s*:\s*(.+)',
+    'keyboard_interrupt': r'\bKeyboardInterrupt\s*:\s*(.+)',
+    'indentation_error': r'\bIndentationError\s*:\s*(.+)',
+    'tab_error': r'\bTabError\s*:\s*(.+)',
+    'unicode_error': r'\bUnicodeError\s*:\s*(.+)',
+    'overflow_error': r'\bOverflowError\s*:\s*(.+)',
+    'recursion_error': r'\bRecursionLimitExceeded\s*:\s*(.+)',
+}
+
+WARNING_PATTERNS = {
+    # Order matters - more specific patterns first
+    'deprecation_warning': r'\bDeprecationWarning\s*:\s*(.+)',
+    'future_warning': r'\bFutureWarning\s*:\s*(.+)',
+    'pending_deprecation_warning': r'\bPendingDeprecationWarning\s*:\s*(.+)',
+    'runtime_warning': r'\bRuntimeWarning\s*:\s*(.+)',
+    'syntax_warning': r'\bSyntaxWarning\s*:\s*(.+)',
+    'import_warning': r'\bImportWarning\s*:\s*(.+)',
+    'unicode_warning': r'\bUnicodeWarning\s*:\s*(.+)',
+    'bytes_warning': r'\bBytesWarning\s*:\s*(.+)',
+    'resource_warning': r'\bResourceWarning\s*:\s*(.+)',
+    'user_warning': r'\bUserWarning\s*:\s*(.+)',
+    # Generic warning pattern last - should be more specific
+    'category_warning': r'(?:^|\s|/)([A-Z]\w*Warning)\s*:\s*(.+)',
+}
 
 
 def _is_base64_image_data(text: str) -> bool:
@@ -43,6 +87,224 @@ def _is_base64_image_data(text: str) -> bool:
                 return True
     
     return False
+
+
+def classify_execution_output(outputs: Any) -> Dict[str, Any]:
+    """
+    Classify execution outputs to detect errors, warnings, and their types.
+    
+    Args:
+        outputs: Cell outputs (could be CRDT YArray or traditional list)
+        
+    Returns:
+        dict: {
+            "has_error": bool,
+            "has_warning": bool,
+            "error": Optional[Dict],  # {"type": str, "message": str, "severity": str}
+            "warning": Optional[Dict],  # {"type": str, "message": str, "severity": str}
+            "execution_status": str  # "success", "error", "warning"
+        }
+    """
+    result = {
+        "has_error": False,
+        "has_warning": False,
+        "error": None,
+        "warning": None,
+        "execution_status": "success"
+    }
+    
+    if not outputs:
+        return result
+    
+    # Collect all text outputs for analysis
+    all_output_text = []
+    
+    # Handle CRDT YArray or traditional list
+    if hasattr(outputs, '__iter__') and not isinstance(outputs, (str, dict)):
+        try:
+            for output in outputs:
+                text = extract_output(output)
+                if text:
+                    all_output_text.append(text)
+        except Exception:
+            pass
+    else:
+        text = extract_output(outputs)
+        if text:
+            all_output_text.append(text)
+    
+    # Analyze each output for errors and warnings
+    for output_text in all_output_text:
+        error_info = _detect_error(output_text)
+        if error_info:
+            result["has_error"] = True
+            result["error"] = error_info
+            result["execution_status"] = "error"
+            break  # First error wins
+        
+        warning_info = _detect_warning(output_text)
+        if warning_info and not result["has_warning"]:
+            result["has_warning"] = True
+            result["warning"] = warning_info
+            if result["execution_status"] == "success":
+                result["execution_status"] = "warning"
+    
+    return result
+
+
+def _detect_error(text: str) -> Optional[Dict[str, str]]:
+    """
+    Detect if text contains error information and classify it.
+    
+    Args:
+        text: Output text to analyze
+        
+    Returns:
+        Optional[Dict]: Error info if detected, None otherwise
+    """
+    if not text or not isinstance(text, str):
+        return None
+    
+    text_lower = text.lower()
+    
+    # Common error patterns with classification
+    error_patterns = [
+        # Syntax Errors
+        (r'syntaxerror[:\s]', "syntax_error", "SyntaxError"),
+        (r'indentationerror[:\s]', "syntax_error", "IndentationError"),
+        (r'tabserror[:\s]', "syntax_error", "TabsError"),
+        
+        # Runtime Errors
+        (r'zerodivisionerror[:\s]', "runtime_error", "ZeroDivisionError"),
+        (r'valueerror[:\s]', "runtime_error", "ValueError"),
+        (r'typeerror[:\s]', "runtime_error", "TypeError"),
+        (r'nameerror[:\s]', "runtime_error", "NameError"),
+        (r'attributeerror[:\s]', "runtime_error", "AttributeError"),
+        (r'keyerror[:\s]', "runtime_error", "KeyError"),
+        (r'indexerror[:\s]', "runtime_error", "IndexError"),
+        (r'filenotfounderror[:\s]', "runtime_error", "FileNotFoundError"),
+        (r'importerror[:\s]', "runtime_error", "ImportError"),
+        (r'modulenotfounderror[:\s]', "runtime_error", "ModuleNotFoundError"),
+        
+        # General error patterns
+        (r'traceback \(most recent call last\)', "runtime_error", "Exception"),
+        (r'error[:\s].*occurred', "runtime_error", "Error"),
+        (r'exception[:\s]', "runtime_error", "Exception"),
+        (r'failed[:\s]', "runtime_error", "Failure"),
+    ]
+    
+    for pattern, error_type, error_class in error_patterns:
+        if re.search(pattern, text_lower):
+            # Extract a clean error message
+            message = _extract_error_message(text, error_class)
+            return {
+                "type": error_type,
+                "message": message,
+                "severity": "error",
+                "error_class": error_class
+            }
+    
+    return None
+
+
+def _detect_warning(text: str) -> Optional[Dict[str, str]]:
+    """
+    Detect if text contains warning information and classify it.
+    
+    Args:
+        text: Output text to analyze
+        
+    Returns:
+        Optional[Dict]: Warning info if detected, None otherwise
+    """
+    if not text or not isinstance(text, str):
+        return None
+    
+    text_lower = text.lower()
+    
+    # Common warning patterns
+    warning_patterns = [
+        (r'userwarning[:\s]', "user_warning", "UserWarning"),
+        (r'deprecationwarning[:\s]', "deprecation_warning", "DeprecationWarning"),
+        (r'futurewarning[:\s]', "future_warning", "FutureWarning"),
+        (r'runtimewarning[:\s]', "runtime_warning", "RuntimeWarning"),
+        (r'warning[:\s]', "general_warning", "Warning"),
+        (r'caution[:\s]', "general_warning", "Caution"),
+        (r'note[:\s]', "info_warning", "Note"),
+    ]
+    
+    for pattern, warning_type, warning_class in warning_patterns:
+        if re.search(pattern, text_lower):
+            message = _extract_warning_message(text, warning_class)
+            return {
+                "type": warning_type,
+                "message": message,
+                "severity": "warning",
+                "warning_class": warning_class
+            }
+    
+    return None
+
+
+def _extract_error_message(text: str, error_class: str) -> str:
+    """
+    Extract a clean, concise error message from error output.
+    
+    Args:
+        text: Full error output text
+        error_class: The detected error class
+        
+    Returns:
+        str: Clean error message
+    """
+    lines = text.strip().split('\n')
+    
+    # Look for the actual error message (usually the last line)
+    for line in reversed(lines):
+        line = line.strip()
+        if error_class.lower() in line.lower() and ':' in line:
+            # Extract message after the colon
+            parts = line.split(':', 1)
+            if len(parts) > 1:
+                return parts[1].strip()
+    
+    # Fallback: return first non-empty line or truncated version
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('-'):
+            return line[:100] + "..." if len(line) > 100 else line
+    
+    return f"{error_class} occurred"
+
+
+def _extract_warning_message(text: str, warning_class: str) -> str:
+    """
+    Extract a clean, concise warning message from warning output.
+    
+    Args:
+        text: Full warning output text
+        warning_class: The detected warning class
+        
+    Returns:
+        str: Clean warning message
+    """
+    lines = text.strip().split('\n')
+    
+    # Look for the warning message
+    for line in lines:
+        line = line.strip()
+        if warning_class.lower() in line.lower() and ':' in line:
+            parts = line.split(':', 1)
+            if len(parts) > 1:
+                return parts[1].strip()
+    
+    # Fallback: return first meaningful line
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('/') and len(line) > 10:
+            return line[:150] + "..." if len(line) > 150 else line
+    
+    return f"{warning_class} occurred"
 
 
 def extract_image_info(output: Union[dict, Any]) -> dict:
@@ -280,9 +542,85 @@ def safe_extract_outputs(outputs: Any, full_output: bool = False) -> list[str]:
     return result
 
 
+def safe_extract_outputs_with_enhanced_structure(outputs: Any, full_output: bool = False) -> dict:
+    """
+    Extract outputs with enhanced structure including error/warning detection.
+    
+    Args:
+        outputs: Cell outputs (could be CRDT YArray or traditional list)
+        full_output: If True, return full outputs without truncation
+        
+    Returns:
+        dict: {
+            "text_outputs": list[str],     # Clean text outputs (images suppressed)
+            "images": list[dict],          # Structured image data with base64
+            "execution_status": str,       # "success", "error", "warning" 
+            "error": Optional[dict],       # Error details if detected
+            "warning": Optional[dict]      # Warning details if detected
+        }
+    """
+    if not outputs:
+        return {
+            "text_outputs": [],
+            "images": [],
+            "execution_status": "success",
+            "error": None,
+            "warning": None
+        }
+    
+    text_outputs = []
+    images = []
+    
+    # Handle CRDT YArray
+    if hasattr(outputs, '__iter__') and not isinstance(outputs, (str, dict)):
+        try:
+            for output in outputs:
+                # Extract image info first
+                image_info = extract_image_info(output)
+                if image_info:
+                    images.append(image_info)
+                
+                # Always get text representation (will be clean due to image suppression)
+                extracted = extract_output(output)
+                if extracted:
+                    truncated = truncate_output(extracted, full_output)
+                    text_outputs.append(truncated)
+        except Exception as e:
+            text_outputs.append(f"[Error extracting output: {str(e)}]")
+    else:
+        # Handle single output or traditional list
+        image_info = extract_image_info(outputs)
+        if image_info:
+            images.append(image_info)
+            
+        extracted = extract_output(outputs)
+        if extracted:
+            truncated = truncate_output(extracted, full_output)
+            text_outputs.append(truncated)
+    
+    # Classify execution status and detect errors/warnings
+    classification = classify_execution_output(outputs)
+    
+    result = {
+        "text_outputs": text_outputs,
+        "images": images,
+        "execution_status": classification["execution_status"]
+    }
+    
+    # Only include error/warning fields if they exist (conditional approach)
+    if classification["error"]:
+        result["error"] = classification["error"]
+    
+    if classification["warning"]:
+        result["warning"] = classification["warning"]
+    
+    return result
+
+
 def safe_extract_outputs_with_images(outputs: Any, full_output: bool = False) -> dict:
     """
     Extract outputs with separate text and image arrays for structured processing.
+    Now includes error and warning detection.
     
     Args:
         outputs: Cell outputs (could be CRDT YArray or traditional list)
@@ -291,7 +629,9 @@ def safe_extract_outputs_with_images(outputs: Any, full_output: bool = False) ->
     Returns:
         dict: {
             "text_outputs": list[str],  # Clean text outputs (images suppressed)
-            "images": list[dict]        # Structured image data with base64
+            "images": list[dict],       # Structured image data with base64
+            "error": dict or None,      # Error info if detected
+            "warning": dict or None     # Warning info if detected
         }
     """
     if not outputs:
@@ -327,7 +667,136 @@ def safe_extract_outputs_with_images(outputs: Any, full_output: bool = False) ->
             truncated = truncate_output(extracted, full_output)
             text_outputs.append(truncated)
     
-    return {
+    # Extract error and warning information
+    error_warning_info = extract_error_and_warning_info(outputs)
+    
+    result = {
         "text_outputs": text_outputs,
         "images": images
+    }
+    
+    # Only include error field if there's an error
+    if error_warning_info["error"]:
+        result["error"] = error_warning_info["error"]
+    
+    # Only include warning field if there's a warning  
+    if error_warning_info["warning"]:
+        result["warning"] = error_warning_info["warning"]
+    
+    return result
+
+
+def detect_error_in_output(output_text: str) -> Optional[Dict[str, str]]:
+    """
+    Detect Python errors in Jupyter output text and return structured error data.
+    
+    Args:
+        output_text: The output text from a Jupyter cell
+        
+    Returns:
+        Dict with error info if found, None otherwise:
+        {
+            "type": "syntax_error",
+            "message": "SyntaxError: unterminated string literal"
+        }
+    """
+    if not output_text or not isinstance(output_text, str):
+        return None
+    
+    # Check for error patterns
+    for error_type, pattern in ERROR_PATTERNS.items():
+        match = re.search(pattern, output_text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            # Extract the error message, clean it up
+            error_message = match.group(0).strip()
+            # Remove extra whitespace and normalize
+            error_message = ' '.join(error_message.split())
+            
+            return {
+                "type": error_type,
+                "message": error_message
+            }
+    
+    return None
+
+
+def detect_warning_in_output(output_text: str) -> Optional[Dict[str, str]]:
+    """
+    Detect Python warnings in Jupyter output text and return structured warning data.
+    
+    Args:
+        output_text: The output text from a Jupyter cell
+        
+    Returns:
+        Dict with warning info if found, None otherwise:
+        {
+            "type": "user_warning", 
+            "message": "UserWarning: This is a test warning"
+        }
+    """
+    if not output_text or not isinstance(output_text, str):
+        return None
+    
+    # Check for warning patterns
+    for warning_type, pattern in WARNING_PATTERNS.items():
+        match = re.search(pattern, output_text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            # Extract the warning message, clean it up
+            warning_message = match.group(0).strip()
+            # Remove extra whitespace and normalize
+            warning_message = ' '.join(warning_message.split())
+            
+            return {
+                "type": warning_type,
+                "message": warning_message
+            }
+    
+    return None
+
+
+def extract_error_and_warning_info(outputs: Any) -> Dict[str, Optional[Dict[str, str]]]:
+    """
+    Extract both error and warning information from Jupyter cell outputs.
+    
+    Args:
+        outputs: Cell outputs (could be CRDT YArray or traditional list)
+        
+    Returns:
+        Dict with error and warning info:
+        {
+            "error": {"type": "...", "message": "...", "severity": "error"} or None,
+            "warning": {"type": "...", "message": "...", "severity": "warning"} or None
+        }
+    """
+    if not outputs:
+        return {"error": None, "warning": None}
+    
+    # Collect all output text for analysis
+    all_output_text = []
+    
+    # Handle CRDT YArray
+    if hasattr(outputs, '__iter__') and not isinstance(outputs, (str, dict)):
+        try:
+            for output in outputs:
+                extracted = extract_output(output)
+                if extracted:
+                    all_output_text.append(extracted)
+        except Exception:
+            pass
+    else:
+        # Handle single output or traditional list
+        extracted = extract_output(outputs)
+        if extracted:
+            all_output_text.append(extracted)
+    
+    # Combine all output text
+    combined_text = '\n'.join(all_output_text)
+    
+    # Detect error and warning
+    error_info = detect_error_in_output(combined_text)
+    warning_info = detect_warning_in_output(combined_text)
+    
+    return {
+        "error": error_info,
+        "warning": warning_info
     }
