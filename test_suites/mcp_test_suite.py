@@ -24,6 +24,11 @@ from typing import Dict, Any, List, Optional, Set
 from pathlib import Path
 import random
 import string
+import sys
+import os
+
+# Add parent directory to path to import mcp_client
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our MCP client
 from mcp_client import MCPClient
