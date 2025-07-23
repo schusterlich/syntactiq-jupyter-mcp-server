@@ -77,4 +77,4 @@ RUN pip install --no-cache-dir \
     "feature-engine>=1.6.0,<1.9.0" \
     "imbalanced-learn>=0.11.0,<0.13.0" \
     # Time Series Analysis
-    "prophet>=1.1.4,<1.2.0" \
+    "prophet>=1.1.4,<1.2.0"

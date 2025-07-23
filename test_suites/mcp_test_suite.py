@@ -1,43 +1,42 @@
 #!/usr/bin/env python3
 """
-Comprehensive Jupyter MCP Server Test Suite
+Comprehensive MCP Server Test Suite with Cleanup
 
-This script provides automated testing for ALL MCP tools with multiple test cases per tool.
-Tests are organized by tool category with detailed validation and error handling.
-
-BULLETPROOF SYNCHRONIZATION: All tests use the new bulletproof synchronization that waits
-for actual completion signals from the notebook server. No more sleeps or timeouts!
-Includes stress testing to validate synchronization under extreme conditions.
-
-CLEANUP: Automatically tracks and removes test artifacts (cells and notebooks) to prevent clutter.
-
-Usage: python mcp_test_suite.py
+Tests all MCP tools with edge cases, stress tests, and bulletproof cleanup.
 """
 
 import asyncio
-import httpx
-import json
-import subprocess
-import time
-import sys
-from typing import Dict, Any, List, Optional, Set
-from pathlib import Path
-import random
-import string
 import sys
 import os
+import uuid
+import random
+import string
+import time
+import subprocess
+import signal
+from pathlib import Path
+from typing import Dict, List, Any, Set, Optional
+import httpx
+from dotenv import load_dotenv
 
-# Add parent directory to path to import mcp_client
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root to Python path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Import our MCP client
+# Load environment configuration
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
+
 from mcp_client import MCPClient
 
-# Configuration
-JUPYTER_URL = "http://localhost:8888"
-MCP_URL = "http://localhost:4040"
-JUPYTER_TOKEN = "MY_TOKEN"
-TIMEOUT_SECONDS = 300
+# Configuration from environment variables
+JUPYTER_URL = os.getenv("JUPYTER_EXTERNAL_URL", "http://localhost:8888")
+MCP_URL = os.getenv("MCP_SERVER_EXTERNAL_URL", "http://localhost:4040")
+JUPYTER_TOKEN = os.getenv("JUPYTER_TOKEN", "MY_TOKEN")
+
+# Test configuration
+TEST_TIMEOUT = 30
+STRESS_TEST_ITERATIONS = 5
 
 class TestArtifactTracker:
     """Track test artifacts for cleanup"""
@@ -300,7 +299,7 @@ async def wait_for_services():
         print_test(f"Waiting for {service_name}")
         
         start_time = time.time()
-        while time.time() - start_time < TIMEOUT_SECONDS:
+        while time.time() - start_time < TEST_TIMEOUT:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     response = await client.get(health_url)

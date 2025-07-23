@@ -256,7 +256,10 @@ print("Chart generated successfully!")</textarea>
                 this.iframe = document.getElementById('jupyter-frame');
                 this.baseUrl = 'http://localhost:8888/lab/tree/';
                 this.mcpUrl = 'http://localhost:4040/mcp';
-                this.token = 'MY_TOKEN';
+                // Configuration - Update with your actual values
+                this.mcpServerUrl = 'http://localhost:4040';
+                this.jupyterUrl = 'http://localhost:8888';
+                this.token = window.JUPYTER_TOKEN || 'syntactiq_jupyter_mcp_token_2024';  // Load from .env-docker or use default
                 this.currentNotebook = 'notebook.ipynb';
             }
             

@@ -1,32 +1,39 @@
-# Jupyter MCP Server Requirements
-# Copyright (c) 2023-2024 Datalayer, Inc.
-# BSD 3-Clause License
+# ==============================================================================
+# Syntactiq Jupyter MCP Server - Core Dependencies
+# ==============================================================================
 
-# Core MCP dependencies
-mcp[cli]>=1.10.1
-pydantic>=2.0.0
-uvicorn>=0.20.0
-click>=8.0.0
-fastapi>=0.100.0
+# MCP Server Framework
+mcp==1.0.0
 
-# Jupyter Core Dependencies (version-aligned for compatibility)
-jupyterlab==4.4.1
-jupyter-collaboration==4.0.2
-jupyter-server-ydoc==2.1.0
-ipykernel>=6.0.0
+# Web Server & HTTP Client
+fastapi==0.115.6
+uvicorn==0.32.1
+httpx==0.28.1
 
-# Jupyter Client Libraries
-jupyter-kernel-client>=0.7.3
-jupyter-nbmodel-client==0.13.5
+# Jupyter Integration
+jupyter-server==2.14.2
+jupyter-collaboration==3.0.2
+jupyterlab==4.3.3
 
-# HTTP Client
-httpx>=0.24.0
+# WebSocket Support (for real-time collaboration)
+websockets==14.1
 
-# Development/Testing Dependencies (optional, for local development)
-pytest>=7.0.0
-mypy>=0.990
-ruff>=0.1.0
+# Development & Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
 
-# Note: CRDT compatibility is handled separately 
-# For Docker: datalayer_pycrdt==0.12.17 is installed after this requirements.txt
-# For local dev: run setup_dev_env.sh which handles pycrdt compatibility 
+# Configuration Management
+python-dotenv==1.0.1
+
+# Utility Libraries
+pydantic==2.10.3
+click==8.1.8
+
+# Async Support
+anyio==4.7.0
+
+# JSON & Data Processing
+typing-extensions==4.12.2
+
+# Logging & Debugging
+structlog==24.4.0 

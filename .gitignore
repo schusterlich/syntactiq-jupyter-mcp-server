@@ -1,4 +1,18 @@
-# Python
+# ==============================================================================
+# Syntactiq Jupyter MCP Server - Git Ignore Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 🔐 Environment & Secrets
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+# NOTE: .env contains production secrets - keep private!
+
+# ------------------------------------------------------------------------------
+# 🐍 Python
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -16,48 +30,49 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Testing
+# ------------------------------------------------------------------------------
+# 🧪 Testing & Coverage
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
 .tox/
 .nox/
-.coverage
-.pytest_cache/
-cover/
+coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
 
-# Jupyter
-.ipynb_checkpoints
-notebooks/.ipython/
-notebooks/.jupyter/
-notebooks/.local/
-notebooks/.npm/
+# ------------------------------------------------------------------------------
+# 🎯 Virtual Environments
+# ------------------------------------------------------------------------------
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Development
+# ------------------------------------------------------------------------------
+# 🎨 IDEs & Editors
+# ------------------------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# ------------------------------------------------------------------------------
+# 📱 OS Generated
+# ------------------------------------------------------------------------------
 .DS_Store
 .DS_Store?
 ._*
@@ -66,49 +81,38 @@ notebooks/.npm/
 ehthumbs.db
 Thumbs.db
 
-# Docker
-.docker/
+# ------------------------------------------------------------------------------
+# 🐳 Docker
+# ------------------------------------------------------------------------------
+.dockerignore
 
-# Logs
+# ------------------------------------------------------------------------------
+# 📓 Jupyter
+# ------------------------------------------------------------------------------
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# ------------------------------------------------------------------------------
+# 📊 Data & Logs  
+# ------------------------------------------------------------------------------
 *.log
 logs/
+data/
+*.db
+*.sqlite
 
-# Process ID files and runtime artifacts
-*.pid
-.http_server.pid
-.server.pid
-
-# Temporary files
-tmp/
-temp/
-.tmp/
-.temp/
-
-# Release artifacts  
-release-notes-*.md
-dist/
-build/
-
-# Test artifacts
-stress_test_mcp.py
-test_connection_direct.py
-test_websocket_connection.py
-create_session_test.py
-debug_connection.py
-debug_failing_tests.py
-
-# Configuration overrides
-.env
-.env.local
-.env.production
-config.local.py
-
-# IDE
-*.sublime-project
-*.sublime-workspace
-
-# Node.js (if any)
+# ------------------------------------------------------------------------------
+# 🔧 Build & Distribution
+# ------------------------------------------------------------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ------------------------------------------------------------------------------
+# 🎯 Temporary & Cache
+# ------------------------------------------------------------------------------
+tmp/
+temp/
+.cache/
+.pytest_cache/

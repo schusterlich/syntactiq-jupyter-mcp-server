@@ -1,64 +1,69 @@
 #!/bin/bash
-# Jupyter MCP Server with Iframe Switching - Quick Start
-# Enhanced startup script for the final iframe + MCP integration
+
+# ==============================================================================
+# Syntactiq Jupyter MCP Server - Quick Start Script
+# ==============================================================================
 
 set -e
 
-echo "🪐✨ Starting Jupyter MCP Server with Iframe Switching..."
-echo "========================================================="
+# Colors for pretty output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
 
-# Stop any existing services
-echo "🛑 Stopping any existing services..."
-docker-compose down
+# Load environment configuration
+if [ -f ".env" ]; then
+    source .env
+    echo -e "${GREEN}✓${NC} Loaded configuration from .env"
+else
+    echo -e "${YELLOW}⚠${NC} .env not found, using defaults"
+    JUPYTER_TOKEN=${JUPYTER_TOKEN:-"MY_TOKEN"}
+    JUPYTER_EXTERNAL_URL=${JUPYTER_EXTERNAL_URL:-"http://localhost:8888"}
+fi
 
-# Start services
-echo "🚀 Starting services..."
+echo -e "${BLUE}🚀 Starting Syntactiq Jupyter MCP Server...${NC}"
+echo ""
+
+# Stop any existing containers
+echo -e "${YELLOW}🛑 Stopping existing containers...${NC}"
+docker-compose down --remove-orphans 2>/dev/null || true
+
+# Build and start services
+echo -e "${CYAN}🔨 Building and starting services...${NC}"
 docker-compose up -d --build
 
-# Wait for services to be ready
-echo "⏳ Waiting for services to start..."
-sleep 15
+# Wait for services to be healthy
+echo -e "${PURPLE}⏱️  Waiting for services to be ready...${NC}"
 
-# Check health
-echo "🔍 Checking service health..."
+# Wait for JupyterLab
+echo -n "• JupyterLab: "
+while ! curl -s "${JUPYTER_EXTERNAL_URL}/api/kernelspecs?token=${JUPYTER_TOKEN}" > /dev/null 2>&1; do
+    echo -n "."
+    sleep 2
+done
+echo -e " ${GREEN}✓${NC}"
 
-# Check Jupyter
-if curl -s -f "http://localhost:8888/api" > /dev/null; then
-    echo "✅ JupyterLab is running"
-else
-    echo "❌ JupyterLab is not responding"
-fi
-
-# Check MCP Server
-if curl -s -f "http://localhost:4040/api/healthz" > /dev/null; then
-    echo "✅ MCP Server is running"
-else
-    echo "❌ MCP Server is not responding"
-fi
+# Wait for MCP Server  
+echo -n "• MCP Server: "
+while ! curl -s "http://localhost:4040/api/healthz" > /dev/null 2>&1; do
+    echo -n "."
+    sleep 2
+done
+echo -e " ${GREEN}✓${NC}"
 
 echo ""
-echo "🎉 Services are ready!"
-echo "======================"
+echo -e "${GREEN}🎉 All services are ready!${NC}"
 echo ""
-echo "📋 Access Information:"
-echo "• JupyterLab: http://localhost:8888?token=MY_TOKEN"
-echo "• MCP Server: http://localhost:4040"
-echo "• Health Check: http://localhost:4040/api/healthz"
+echo -e "${CYAN}📋 Access Information:${NC}"
+echo -e "• JupyterLab: ${JUPYTER_EXTERNAL_URL}?token=${JUPYTER_TOKEN}"
+echo -e "• MCP Server: http://localhost:4040"
 echo ""
-echo "🧪 Testing Iframe Switching:"
-echo "1. Start HTTP server: python3 -m http.server 8080 --bind 127.0.0.1 &"
-echo "2. Open test page: http://localhost:8080/interactive_mcp_test.html"
-echo "3. Try notebook switching and MCP operations!"
-echo ""
-echo "🛠️  Management Commands:"
-echo "• Stop services: docker-compose down"
-echo "• View logs: docker-compose logs -f"
-echo "• Test MCP: python tests/mcp_test_suite.py"
-echo ""
-echo "🎯 What to test:"
-echo "• Switch between Analysis 1/2 notebooks"
-echo "• Watch MCP Server Target update"
-echo "• Add markdown/code cells"
-echo "• Execute code and see results"
-echo ""
-echo "Happy coding! 🚀" 
+echo -e "${YELLOW}💡 Quick Commands:${NC}"
+echo -e "• View logs: ${BLUE}docker-compose logs -f${NC}"
+echo -e "• Stop services: ${BLUE}docker-compose down${NC}"
+echo -e "• Run tests: ${BLUE}python test_suites/mcp_test_suite.py${NC}"
+echo "" 

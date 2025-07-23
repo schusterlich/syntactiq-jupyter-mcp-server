@@ -5,26 +5,26 @@ services:
       dockerfile: jupyterlab.Dockerfile
     container_name: jupyter-mcp-jupyterlab
     ports:
-      - "8888:8888"
+      - "${JUPYTER_PORT:-8888}:8888"
     volumes:
       - ./notebooks:/home/jovyan
     environment:
-      - JUPYTER_ENABLE_LAB=yes
-      - JUPYTER_TOKEN=MY_TOKEN
+      - JUPYTER_ENABLE_LAB=${JUPYTER_ENABLE_LAB:-yes}
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
     working_dir: /home/jovyan/
     command: >
       jupyter lab --port=8888 --ip=0.0.0.0 --allow-root --no-browser
-      --ServerApp.token='MY_TOKEN'
-      --ServerApp.disable_check_xsrf=True
-      --ServerApp.allow_origin='*'
-      --ServerApp.allow_remote_access=True
-      --ServerApp.root_dir='/home/jovyan/'
-      --LabApp.collaborative=True
+      --ServerApp.token='${JUPYTER_TOKEN}'
+      --ServerApp.disable_check_xsrf=${JUPYTER_DISABLE_CHECK_XSRF:-True}
+      --ServerApp.allow_origin='${JUPYTER_ALLOW_ORIGIN:-*}'
+      --ServerApp.allow_remote_access=${JUPYTER_ALLOW_REMOTE_ACCESS:-True}
+      --ServerApp.root_dir='${JUPYTER_ROOT_DIR:-/home/jovyan/}'
+      --LabApp.collaborative=${JUPYTER_COLLABORATIVE:-True}
       --ServerApp.tornado_settings='{"headers":{"Content-Security-Policy":"frame-ancestors '\''self'\'' *;"}}'
     networks:
       - jupyter-mcp-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/api/kernelspecs?token=MY_TOKEN"]
+      test: ["CMD", "curl", "-f", "http://localhost:8888/api/kernelspecs?token=${JUPYTER_TOKEN}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,13 +34,13 @@ services:
     build: .
     container_name: jupyter-mcp-server
     ports:
-      - "4040:4040"
+      - "${MCP_SERVER_PORT:-4040}:4040"
     environment:
-      - TRANSPORT=streamable-http
-      - RUNTIME_URL=http://jupyterlab:8888
-      - ROOM_URL=http://jupyterlab:8888
-      - RUNTIME_TOKEN=MY_TOKEN
-      - ROOM_TOKEN=MY_TOKEN
+      - TRANSPORT=${TRANSPORT:-streamable-http}
+      - RUNTIME_URL=${RUNTIME_URL:-http://jupyterlab:8888}
+      - ROOM_URL=${ROOM_URL:-http://jupyterlab:8888}
+      - RUNTIME_TOKEN=${RUNTIME_TOKEN}
+      - ROOM_TOKEN=${ROOM_TOKEN}
     depends_on:
       jupyterlab:
         condition: service_healthy
