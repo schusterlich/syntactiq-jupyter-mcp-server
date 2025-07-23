@@ -701,124 +701,215 @@ async def test_workspace_tools(client: MCPClient, results: TestResults):
     except Exception as e:
         results.add_result("prepare_notebook - Preparation", False, str(e))
 
-async def test_stress_bulletproof_sync(client: MCPClient, results: TestResults):
-    """Stress test to validate bulletproof synchronization under extreme conditions"""
-    print_category("Stress Test - Bulletproof Synchronization")
+async def test_error_warning_detection_system(client: MCPClient, results: TestResults):
+    """Test the new error and warning detection system comprehensively"""
+    print_category("Error & Warning Detection System")
     
     test_id = generate_test_id()
     
-    # Get initial state
-    initial_cells = await client.read_all_cells()
-    initial_count = len(initial_cells)
-    
-    # Test 1: Rapid serial insertions (10 markdown + 10 code)
-    print_test("Stress - Rapid serial insertions")
+    # Test 1: Syntax Error Detection and Structure
+    print_test("Error detection - Syntax error structure")
     try:
-        expected_count = initial_count
+        syntax_error_code = f"# Syntax error test {test_id}\nprint('unterminated string"
+        cell_result = await client.append_execute_code_cell(syntax_error_code)
         
-        # Rapid markdown insertions
-        for i in range(5):  # Reduced from 10 to keep test time reasonable
-            await client.append_markdown_cell(f"# Stress Test {i+1} {test_id}\n\nRapid insertion test.")
-            expected_count += 1
+        # Validate basic structure
+        assert isinstance(cell_result, dict), "Should return dict"
+        assert 'cell_index' in cell_result, "Should have cell_index"
+        assert 'output' in cell_result, "Should have output array"
+        assert 'images' in cell_result, "Should have images array"
         
-        # Rapid code insertions
-        for i in range(5):  # Reduced from 10 to keep test time reasonable
-            await client.append_execute_code_cell(f"# Stress code {i+1} {test_id}\nprint('Rapid test {i+1}')")
-            expected_count += 1
+        # Test new error detection methods
+        assert client.has_error(cell_result), "Should detect syntax error"
+        assert not client.has_warning(cell_result), "Should not have warning"
         
-        # Verify final count
-        final_cells = await client.read_all_cells()
-        actual_count = len(final_cells)
-        assert actual_count == expected_count, f"Expected {expected_count} cells, got {actual_count}"
-        results.add_result("Stress - Rapid insertions", True)
+        error_info = client.get_error_info(cell_result)
+        assert error_info is not None, "Should return error info"
+        assert error_info["type"] == "syntax_error", f"Expected syntax_error, got {error_info['type']}"
+        assert "SyntaxError" in error_info["message"], "Error message should contain SyntaxError"
+        
+        # Verify conditional field presence
+        assert 'error' in cell_result, "Error field should be present"
+        assert 'warning' not in cell_result, "Warning field should not be present"
+        
+        results.add_result("Error detection - Syntax error structure", True)
     except Exception as e:
-        results.add_result("Stress - Rapid insertions", False, str(e))
+        results.add_result("Error detection - Syntax error structure", False, str(e))
     
-    # Test 2: Mixed operations in rapid succession
-    print_test("Stress - Mixed operations")
+    # Test 2: Runtime Error Detection
+    print_test("Error detection - Runtime error types")
     try:
-        current_cells = await client.read_all_cells()
-        current_count = len(current_cells)
-        
-        operations = [
-            ("append_markdown", lambda: client.append_markdown_cell(f"# Mixed {generate_test_id()}")),
-            ("append_code", lambda: client.append_execute_code_cell(f"print('Mixed {generate_test_id()}')")),
-            ("overwrite_first", lambda: client.overwrite_cell_source(0, f"# Overwritten {generate_test_id()}")),
+        # Test multiple error types
+        error_tests = [
+            ("x = 1/0", "zero_division_error", "ZeroDivisionError"),
+            ("undefined_variable", "name_error", "NameError"),
+            ("int('not_a_number')", "value_error", "ValueError"),
+            ("[1,2,3][10]", "index_error", "IndexError"),
+            ("{'a': 1}['missing_key']", "key_error", "KeyError")
         ]
         
-        expected_count = current_count
-        for i in range(6):  # Reduced from 20 to keep test time reasonable
-            op_name, op_func = operations[i % len(operations)]
-            await op_func()
-            if op_name in ["append_markdown", "append_code"]:
-                expected_count += 1
+        for code, expected_type, expected_error in error_tests:
+            test_code = f"# {expected_type} test {test_id}\n{code}"
+            cell_result = await client.append_execute_code_cell(test_code)
+            
+            if client.has_error(cell_result):
+                error_info = client.get_error_info(cell_result)
+                if error_info["type"] == expected_type and expected_error in error_info["message"]:
+                    continue  # Success
+                else:
+                    raise AssertionError(f"Expected {expected_type} with {expected_error}, got {error_info}")
+            else:
+                raise AssertionError(f"Should detect {expected_type} in: {code}")
         
-        # Verify count
-        mixed_cells = await client.read_all_cells()
-        assert len(mixed_cells) == expected_count, f"Mixed ops count mismatch: expected {expected_count}, got {len(mixed_cells)}"
-        results.add_result("Stress - Mixed operations", True)
+        results.add_result("Error detection - Runtime error types", True)
     except Exception as e:
-        results.add_result("Stress - Mixed operations", False, str(e))
+        results.add_result("Error detection - Runtime error types", False, str(e))
     
-    # Test 3: Rapid deletions
-    print_test("Stress - Rapid deletions")
+    # Test 3: Warning Detection and Structure
+    print_test("Warning detection - Warning structure")
     try:
-        # Add some cells to delete
-        deletion_cells = await client.read_all_cells()
-        deletion_count = len(deletion_cells)
+        warning_code = f"""
+# Warning test {test_id}
+import warnings
+warnings.warn("This is a test warning for {test_id}")
+print("Warning test completed")
+"""
+        cell_result = await client.append_execute_code_cell(warning_code)
         
-        for i in range(3):  # Add 3 cells to delete
-            await client.append_markdown_cell(f"# Delete Target {i+1} {test_id}")
-            deletion_count += 1
+        # Test warning detection methods
+        assert client.has_warning(cell_result), "Should detect warning"
+        warning_info = client.get_warning_info(cell_result)
+        assert warning_info is not None, "Should return warning info"
+        assert warning_info["type"] == "user_warning", f"Expected user_warning, got {warning_info['type']}"
+        assert "UserWarning" in warning_info["message"], "Warning message should contain UserWarning"
         
-        # Now delete them rapidly
-        for i in range(3):
-            current_cells = await client.read_all_cells()
-            if len(current_cells) > initial_count:  # Don't delete original cells
-                delete_index = len(current_cells) - 1
-                await client.call_tool("delete_cell", {"cell_index": delete_index})
-                deletion_count -= 1
+        # Verify conditional field presence
+        assert 'warning' in cell_result, "Warning field should be present"
+        # Note: This might also have an error field if there's stderr output, that's OK
         
-        # Verify final state
-        final_deletion_cells = await client.read_all_cells()
-        assert len(final_deletion_cells) == deletion_count, f"Deletion count mismatch: expected {deletion_count}, got {len(final_deletion_cells)}"
-        results.add_result("Stress - Rapid deletions", True)
+        results.add_result("Warning detection - Warning structure", True)
     except Exception as e:
-        results.add_result("Stress - Rapid deletions", False, str(e))
+        results.add_result("Warning detection - Warning structure", False, str(e))
     
-    # Test 4: Edge case insertions
-    print_test("Stress - Edge case positions")
+    # Test 4: Clean Execution (No Errors/Warnings)
+    print_test("Clean execution - No error/warning fields")
     try:
-        edge_cells = await client.read_all_cells()
-        edge_count = len(edge_cells)
+        clean_code = f"""
+# Clean execution test {test_id}
+import math
+result = math.sqrt(16)
+print(f"Square root of 16 is {{result}}")
+data = [1, 2, 3, 4, 5]
+total = sum(data)
+print(f"Sum of {{data}} is {{total}}")
+"""
+        cell_result = await client.append_execute_code_cell(clean_code)
         
-        # Insert at beginning
-        await client.insert_markdown_cell(0, f"# At Beginning {test_id}")
-        edge_count += 1
+        # Should have no errors or warnings
+        assert not client.has_error(cell_result), "Should not have error"
+        assert not client.has_warning(cell_result), "Should not have warning" 
+        assert not client.has_execution_issues(cell_result), "Should not have any execution issues"
         
-        # Insert in middle
-        middle_pos = edge_count // 2
-        await client.insert_markdown_cell(middle_pos, f"# In Middle {test_id}")
-        edge_count += 1
+        # Verify conditional fields are absent
+        assert 'error' not in cell_result, "Error field should not be present"
+        assert 'warning' not in cell_result, "Warning field should not be present"
         
-        # Verify final count
-        edge_final = await client.read_all_cells()
-        assert len(edge_final) == edge_count, f"Edge insertion count mismatch: expected {edge_count}, got {len(edge_final)}"
-        results.add_result("Stress - Edge positions", True)
+        # But should have normal fields
+        assert 'output' in cell_result and len(cell_result['output']) > 0, "Should have output"
+        assert 'images' in cell_result, "Should have images field"
+        
+        results.add_result("Clean execution - No error/warning fields", True)
     except Exception as e:
-        results.add_result("Stress - Edge positions", False, str(e))
+        results.add_result("Clean execution - No error/warning fields", False, str(e))
     
-    # Test 5: Consistency verification (no race conditions)
-    print_test("Stress - Consistency checks")
+    # Test 5: Client Utility Methods
+    print_test("Client utilities - Method functionality")
     try:
-        # Multiple rapid reads should be consistent
-        for i in range(3):
-            cells1 = await client.read_all_cells()
-            cells2 = await client.read_all_cells()
-            assert len(cells1) == len(cells2), f"Consistency check {i+1}: cell count changed between reads"
-        results.add_result("Stress - Consistency", True)
+        # Create test cases for each scenario
+        error_result = await client.append_execute_code_cell("x = 1/0  # Force error")
+        warning_result = await client.append_execute_code_cell("import warnings; warnings.warn('test')")
+        clean_result = await client.append_execute_code_cell("print('clean execution')")
+        
+        # Test has_error
+        assert client.has_error(error_result), "has_error should detect error"
+        assert not client.has_error(warning_result), "has_error should not detect warning as error"
+        assert not client.has_error(clean_result), "has_error should not detect clean execution"
+        
+        # Test has_warning  
+        assert client.has_warning(warning_result), "has_warning should detect warning"
+        assert not client.has_warning(error_result), "has_warning should not detect error as warning"
+        assert not client.has_warning(clean_result), "has_warning should not detect clean execution"
+        
+        # Test has_execution_issues
+        assert client.has_execution_issues(error_result), "has_execution_issues should detect error"
+        assert client.has_execution_issues(warning_result), "has_execution_issues should detect warning"
+        assert not client.has_execution_issues(clean_result), "has_execution_issues should not detect clean execution"
+        
+        # Test get_error_info
+        error_info = client.get_error_info(error_result)
+        assert error_info is not None and "type" in error_info, "get_error_info should return structured data"
+        assert client.get_error_info(clean_result) is None, "get_error_info should return None for clean execution"
+        
+        # Test get_warning_info
+        warning_info = client.get_warning_info(warning_result)
+        assert warning_info is not None and "type" in warning_info, "get_warning_info should return structured data"
+        assert client.get_warning_info(clean_result) is None, "get_warning_info should return None for clean execution"
+        
+        # Test get_execution_summary
+        error_summary = client.get_execution_summary(error_result)
+        assert error_summary["has_error"], "Summary should show has_error=True"
+        assert not error_summary["has_warning"], "Summary should show has_warning=False"
+        
+        clean_summary = client.get_execution_summary(clean_result)
+        assert not clean_summary["has_error"], "Clean summary should show has_error=False"
+        assert not clean_summary["has_warning"], "Clean summary should show has_warning=False"
+        assert clean_summary["has_output"], "Clean summary should show has_output=True"
+        
+        results.add_result("Client utilities - Method functionality", True)
     except Exception as e:
-        results.add_result("Stress - Consistency", False, str(e))
+        results.add_result("Client utilities - Method functionality", False, str(e))
+    
+    # Test 6: Read Operations Include Error/Warning Fields
+    print_test("Read operations - Error/warning preservation")
+    try:
+        # Create a cell with an error and read it back
+        error_cell = await client.append_execute_code_cell("undefined_var  # NameError")
+        error_cell_index = error_cell["cell_index"]
+        
+        # Read the specific cell
+        read_cell_result = await client.read_cell(error_cell_index)
+        assert client.has_error(read_cell_result), "read_cell should preserve error information"
+        
+        # Read all cells and find our error cell
+        all_cells = await client.read_all_cells()
+        error_cells = [cell for cell in all_cells if client.has_error(cell)]
+        assert len(error_cells) > 0, "read_all_cells should preserve error information"
+        
+        results.add_result("Read operations - Error/warning preservation", True)
+    except Exception as e:
+        results.add_result("Read operations - Error/warning preservation", False, str(e))
+    
+    # Test 7: Different Execution Methods Support Error/Warning Detection
+    print_test("Execution methods - Universal error/warning support")
+    try:
+        # Test different execution methods
+        methods_to_test = [
+            ("append_execute_code_cell", lambda code: client.append_execute_code_cell(code)),
+            ("insert_execute_code_cell", lambda code: client.insert_execute_code_cell(0, code))
+        ]
+        
+        for method_name, method in methods_to_test:
+            # Test with error
+            error_result = await method("1/0  # Division by zero")
+            assert client.has_error(error_result), f"{method_name} should support error detection"
+            
+            # Test with clean execution
+            clean_result = await method("print('test')")
+            assert not client.has_execution_issues(clean_result), f"{method_name} should handle clean execution"
+        
+        results.add_result("Execution methods - Universal support", True)
+    except Exception as e:
+        results.add_result("Execution methods - Universal support", False, str(e))
 
 async def test_output_truncation(client: MCPClient, results: TestResults):
     """Test output truncation functionality with full_output parameter"""
@@ -1475,6 +1566,125 @@ async def setup_test_environment():
         
         print_success("Created basic test notebook")
 
+async def test_stress_bulletproof_sync(client: MCPClient, results: TestResults):
+    """Stress test to validate bulletproof synchronization under extreme conditions"""
+    print_category("Stress Test - Bulletproof Synchronization")
+    
+    test_id = generate_test_id()
+    
+    # Get initial state
+    initial_cells = await client.read_all_cells()
+    initial_count = len(initial_cells)
+    
+    # Test 1: Rapid serial insertions (10 markdown + 10 code)
+    print_test("Stress - Rapid serial insertions")
+    try:
+        expected_count = initial_count
+        
+        # Rapid markdown insertions
+        for i in range(5):  # Reduced from 10 to keep test time reasonable
+            await client.append_markdown_cell(f"# Stress Test {i+1} {test_id}\n\nRapid insertion test.")
+            expected_count += 1
+        
+        # Rapid code insertions
+        for i in range(5):  # Reduced from 10 to keep test time reasonable
+            await client.append_execute_code_cell(f"# Stress code {i+1} {test_id}\nprint('Rapid test {i+1}')")
+            expected_count += 1
+        
+        # Verify final count
+        final_cells = await client.read_all_cells()
+        actual_count = len(final_cells)
+        assert actual_count == expected_count, f"Expected {expected_count} cells, got {actual_count}"
+        results.add_result("Stress - Rapid insertions", True)
+    except Exception as e:
+        results.add_result("Stress - Rapid insertions", False, str(e))
+    
+    # Test 2: Mixed operations in rapid succession
+    print_test("Stress - Mixed operations")
+    try:
+        current_cells = await client.read_all_cells()
+        current_count = len(current_cells)
+        
+        operations = [
+            ("append_markdown", lambda: client.append_markdown_cell(f"# Mixed {generate_test_id()}")),
+            ("append_code", lambda: client.append_execute_code_cell(f"print('Mixed {generate_test_id()}')")),
+            ("overwrite_first", lambda: client.overwrite_cell_source(0, f"# Overwritten {generate_test_id()}")),
+        ]
+        
+        expected_count = current_count
+        for i in range(6):  # Reduced from 20 to keep test time reasonable
+            op_name, op_func = operations[i % len(operations)]
+            await op_func()
+            if op_name in ["append_markdown", "append_code"]:
+                expected_count += 1
+        
+        # Verify count
+        mixed_cells = await client.read_all_cells()
+        assert len(mixed_cells) == expected_count, f"Mixed ops count mismatch: expected {expected_count}, got {len(mixed_cells)}"
+        results.add_result("Stress - Mixed operations", True)
+    except Exception as e:
+        results.add_result("Stress - Mixed operations", False, str(e))
+    
+    # Test 3: Rapid deletions
+    print_test("Stress - Rapid deletions")
+    try:
+        # Add some cells to delete
+        deletion_cells = await client.read_all_cells()
+        deletion_count = len(deletion_cells)
+        
+        for i in range(3):  # Add 3 cells to delete
+            await client.append_markdown_cell(f"# Delete Target {i+1} {test_id}")
+            deletion_count += 1
+        
+        # Now delete them rapidly
+        for i in range(3):
+            current_cells = await client.read_all_cells()
+            if len(current_cells) > initial_count:  # Don't delete original cells
+                delete_index = len(current_cells) - 1
+                await client.call_tool("delete_cell", {"cell_index": delete_index})
+                deletion_count -= 1
+        
+        # Verify final state
+        final_deletion_cells = await client.read_all_cells()
+        assert len(final_deletion_cells) == deletion_count, f"Deletion count mismatch: expected {deletion_count}, got {len(final_deletion_cells)}"
+        results.add_result("Stress - Rapid deletions", True)
+    except Exception as e:
+        results.add_result("Stress - Rapid deletions", False, str(e))
+    
+    # Test 4: Edge case insertions
+    print_test("Stress - Edge case positions")
+    try:
+        edge_cells = await client.read_all_cells()
+        edge_count = len(edge_cells)
+        
+        # Insert at beginning
+        await client.insert_markdown_cell(0, f"# At Beginning {test_id}")
+        edge_count += 1
+        
+        # Insert in middle
+        middle_pos = edge_count // 2
+        await client.insert_markdown_cell(middle_pos, f"# In Middle {test_id}")
+        edge_count += 1
+        
+        # Verify final count
+        edge_final = await client.read_all_cells()
+        assert len(edge_final) == edge_count, f"Edge insertion count mismatch: expected {edge_count}, got {len(edge_final)}"
+        results.add_result("Stress - Edge positions", True)
+    except Exception as e:
+        results.add_result("Stress - Edge positions", False, str(e))
+    
+    # Test 5: Consistency verification (no race conditions)
+    print_test("Stress - Consistency checks")
+    try:
+        # Multiple rapid reads should be consistent
+        for i in range(3):
+            cells1 = await client.read_all_cells()
+            cells2 = await client.read_all_cells()
+            assert len(cells1) == len(cells2), f"Consistency check {i+1}: cell count changed between reads"
+        results.add_result("Stress - Consistency", True)
+    except Exception as e:
+        results.add_result("Stress - Consistency", False, str(e))
+
 async def wait_for_notebook_session(client: MCPClient):
     """Wait for notebook collaboration session to be ready"""
     print_category("Notebook Session Setup")
@@ -1546,6 +1756,7 @@ async def main():
         await test_cell_manipulation_tools(client, results)
         await test_notebook_management_tools(client, results)
         await test_workspace_tools(client, results)
+        await test_error_warning_detection_system(client, results)
         await test_output_truncation(client, results)
         await test_stress_bulletproof_sync(client, results)
         
