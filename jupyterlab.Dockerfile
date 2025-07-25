@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy and install Syntactiq custom packages (as root to avoid permission issues)
 COPY syntactiq_additions/ /tmp/syntactiq_additions/
-RUN pip install --no-cache-dir /tmp/syntactiq_additions/syntactiq_utils-0.1.0-py3-none-any.whl && \
+RUN pip install --no-cache-dir /tmp/syntactiq_additions/syntactiq_utils-0.2.0-py3-none-any.whl && \
     pip install --no-cache-dir /tmp/syntactiq_additions/syntactiq_theme-0.1.0-py3-none-any.whl && \
     rm -rf /tmp/syntactiq_additions/
 
